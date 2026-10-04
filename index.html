@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Formica — the deep burrow</title>
+<meta name="description" content="A fire ant works her way down through five floors of a living ant burrow." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bitter:ital,wght@0,500;0,700;1,500&family=Barlow+Semi+Condensed:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+
+<div id="app"></div>
+<div id="hurt"></div>
+<div id="dmg-layer">
+  <span class="dmg"></span><span class="dmg"></span><span class="dmg"></span><span class="dmg"></span>
+  <span class="dmg"></span><span class="dmg"></span><span class="dmg"></span><span class="dmg"></span>
+  <span class="dmg"></span><span class="dmg"></span><span class="dmg"></span><span class="dmg"></span>
+  <span class="dmg"></span><span class="dmg"></span><span class="dmg"></span><span class="dmg"></span>
+</div>
+
+<div id="hud">
+  <div id="crosshair"><i></i><i></i><i></i><i></i></div>
+  <div id="hitmarker"><i></i><i></i></div>
+
+  <div class="floorplate">
+    <h1 id="floor-name">Entrance galleries</h1>
+    <p id="floor-sub">Floor 1 of 5</p>
+  </div>
+
+  <div id="room-label"></div>
+
+  <div id="timer-wrap" class="gone">
+    <span class="tick">Cave-in</span><strong id="timer">4:00</strong>
+  </div>
+
+  <div id="bossbar" class="gone">
+    <div class="bosshead">
+      <h2 id="boss-name">The Gatekeeper</h2>
+      <p id="boss-title">Soldier champion of the entrance</p>
+    </div>
+    <div class="bossmeter"><i id="boss-fill"></i></div>
+    <p id="boss-tell"></p>
+  </div>
+
+  <div id="tacnote">
+    <b>Tactical view</b>
+    <span>Click to send your nestmates · release Tab to drop back in</span>
+  </div>
+
+  <div id="powercard">
+    <p class="pc-eyebrow">Power taken</p>
+    <h2 id="power-name">Wing dash</h2>
+    <p id="power-blurb">Your wings snap open.</p>
+    <p class="pc-key">Press <b id="power-key">Space</b></p>
+  </div>
+
+  <ul id="killfeed"></ul>
+  <div id="banner"><h2 id="banner-name"></h2><p id="banner-line"></p></div>
+  <div id="toast"></div>
+
+  <!-- always on: what to do next, and which way it is -->
+  <div id="objective">
+    <div class="obj-row">
+      <span class="obj-arrow" id="obj-arrow">&#10148;</span>
+      <div class="obj-text">
+        <b id="obj-task">Find food</b>
+        <span id="obj-detail">0 of 6 collected</span>
+      </div>
+      <span class="obj-dist" id="obj-dist"></span>
+    </div>
+  </div>
+
+  <div id="clickhint" class="gone">Click the view to take control of the mouse</div>
+
+  <p id="state-note">
+    <span class="crawl">Squeezing through</span>
+    <span class="swim">Swimming</span>
+    <span class="raft">Riding a leaf</span>
+  </p>
+
+  <div class="vitals">
+    <div class="hp">
+      <b id="hp-num">160</b>
+      <div class="bar"><i id="hp-fill"></i></div>
+    </div>
+    <div class="row"><span class="tag">Sprint</span><div class="bar thin stam"><i id="stam-fill"></i></div></div>
+    <div class="row"><span class="tag">Scent</span><div class="bar thin scent"><i id="scent-fill"></i></div></div>
+    <div class="row"><span class="tag">Alarm</span><div class="bar thin alarm"><i id="alarm-fill"></i></div></div>
+  </div>
+
+  <div class="powers">
+    <div class="pw" id="pw-dash"><kbd>Space</kbd><span>Wing dash</span></div>
+    <div class="pw" id="pw-burst"><kbd>R</kbd><span>Acid burst</span></div>
+    <div class="pw" id="pw-chitin"><kbd>—</kbd><span>Chitin plating</span></div>
+    <div class="pw" id="pw-call"><kbd>C</kbd><span>Call nestmates</span></div>
+    <div class="pw" id="pw-carry"><kbd>E</kbd><span>Carrying brood</span></div>
+  </div>
+
+  <div id="burst-wrap" class="gone">
+    <span class="tag">Burst</span>
+    <div class="bar thin burst"><i id="burst-fill"></i></div>
+  </div>
+
+  <div class="gunbox">
+    <div class="slots">
+      <div class="slot active" id="slot-acid"><kbd>1</kbd><span>Acid</span></div>
+      <div class="slot" id="slot-bite"><kbd>2</kbd><span>Mandibles</span></div>
+    </div>
+    <p class="gunname" id="gun-name">Formic acid</p>
+    <p class="ammo" id="ammo-wrap"><b id="ammo-count">70</b><em>/</em><span id="ammo-max">70</span></p>
+  </div>
+
+  <div class="crop">
+    <span class="tag">Crop</span>
+    <p><b id="crop-have">0</b><em>of</em><span id="crop-need">6</span></p>
+  </div>
+
+  <div id="mapbox">
+    <canvas id="minimap" width="260" height="260"></canvas>
+    <ul id="maplegend">
+      <li><i class="k-you"></i>you</li>
+      <li><i class="k-food"></i>food</li>
+      <li><i class="k-exit"></i>way down</li>
+      <li><i class="k-foe"></i>hunting you</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------ screens -->
+<section id="screen-load" class="screen centre">
+  <div class="loader">
+    <p class="genus">Solenopsis invicta</p>
+    <h1 class="title">Formica</h1>
+    <div class="loadbar"><i id="load-bar"></i></div>
+    <p id="load-what">Digging the colony…</p>
+  </div>
+</section>
+
+<section id="screen-title" class="screen left gone">
+  <div class="plate">
+    <p class="genus">Solenopsis invicta &middot; worker, 4&nbsp;mm</p>
+    <h1 class="title">Formica</h1>
+    <p class="sub">They took your queen. Go down and get her back.</p>
+
+    <p class="lede">
+      A black colony raided your nest and carried your queen five floors down
+      into their burrow. You are the last worker left. Eat to keep going, put
+      down whatever is guarding each shaft, and keep descending until you find
+      her.
+    </p>
+
+    <div class="cta-row">
+      <button id="btn-brief" class="cta">How to play</button>
+      <button id="btn-story" class="cta ghost">Watch the story</button>
+      <button id="btn-start" class="cta ghost">Jump straight in</button>
+    </div>
+    <p class="note">First time? Start with <b>How to play</b> — two short pages.</p>
+    <p class="build" id="build-tag"></p>
+  </div>
+</section>
+
+<section id="screen-brief" class="screen centre gone">
+  <div class="brief">
+
+    <!-- page one: what this is and why you are doing it -->
+    <div class="brief-page" id="brief-1">
+      <p class="brief-step">1 of 2 &middot; What this is</p>
+      <h2>You are one ant, going down after your queen</h2>
+
+      <div class="brief-grid">
+        <div class="brief-cell">
+          <h3>The situation</h3>
+          <p>A black colony raided your nest and carried your queen five floors
+            down into their burrow. Everyone else is dead. You are going after
+            her.</p>
+        </div>
+        <div class="brief-cell">
+          <h3>What you do on each floor</h3>
+          <p>Eat until your crop is full, kill the champion guarding the shaft,
+            then drop down it. Five floors, then she is yours.</p>
+        </div>
+        <div class="brief-cell">
+          <h3>Why food matters</h3>
+          <p>It is not points. The shaft stays shut until your crop is full —
+            an ant with nothing in her does not make the next floor.</p>
+        </div>
+        <div class="brief-cell">
+          <h3>When you are lost</h3>
+          <p>The bar at the top always names your next job and points at it.
+            Hold <kbd>Q</kbd> and a scent trail shows you the way.</p>
+        </div>
+      </div>
+
+      <div class="brief-foot">
+        <button id="brief-next" class="cta">Next: the controls</button>
+      </div>
+    </div>
+
+    <!-- page two: the controls, laid out as two columns -->
+    <div class="brief-page gone" id="brief-2">
+      <p class="brief-step">2 of 2 &middot; Controls</p>
+      <h2>Move with the arrows, fight with the rest</h2>
+
+      <div class="ctrl-cols">
+        <div class="ctrl-col">
+          <h3>Moving</h3>
+          <div class="arrowpad">
+            <kbd class="up">&uarr;</kbd>
+            <kbd class="left">&larr;</kbd>
+            <kbd class="down">&darr;</kbd>
+            <kbd class="right">&rarr;</kbd>
+            <span class="pad-note">or <b>W A S D</b></span>
+          </div>
+          <ul class="ctrl-list">
+            <li><kbd>Shift</kbd><span>Sprint &mdash; fast, but they hear you</span></li>
+            <li><kbd>Mouse</kbd><span>Look around</span></li>
+            <li><kbd>Esc</kbd><span>Pause</span></li>
+          </ul>
+        </div>
+
+        <div class="ctrl-col">
+          <h3>Powers</h3>
+          <ul class="power-grid">
+            <li class="have"><kbd>Space</kbd><b>Fly</b><span>A burst of wings. Yours from the start.</span></li>
+            <li class="have"><kbd>Click</kbd><b>Acid</b><span>Green vapour that keeps burning.</span></li>
+            <li class="have"><kbd>2</kbd><b>Mandibles</b><span>Twice the damage, up close.</span></li>
+            <li><kbd>R</kbd><b>Acid burst</b><span>Hold to charge a wide cloud.</span></li>
+            <li><kbd>C</kbd><b>Call nestmates</b><span>They fight and haul stone.</span></li>
+            <li class="have"><kbd>E</kbd><b>Feed / carry</b><span>Drink from a honeypot ant.</span></li>
+          </ul>
+          <p class="ctrl-note">The greyed ones are taken from champions as you go down.</p>
+        </div>
+      </div>
+
+      <div class="brief-foot">
+        <button id="brief-back" class="cta ghost">Back</button>
+        <button id="brief-play" class="cta">Go down</button>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<section id="screen-story" class="screen story gone">
+  <div class="story-inner" id="story-inner">
+    <p id="story-eyebrow" class="story-eyebrow"></p>
+    <h2 id="story-title"></h2>
+    <p id="story-body"></p>
+    <ul id="story-list"></ul>
+  </div>
+  <div class="story-foot">
+    <div class="story-track"><i id="story-bar"></i></div>
+    <button id="btn-skip" class="cta ghost small">Skip</button>
+  </div>
+</section>
+
+<section id="screen-pause" class="screen centre gone">
+  <div class="card">
+    <h2>Paused</h2>
+    <p>The burrow is still down there, working out where you went.</p>
+    <p class="build" id="build-tag-2"></p>
+    <button id="btn-resume" class="cta">Back in</button>
+  </div>
+</section>
+
+<section id="screen-dead" class="screen centre gone">
+  <div class="card dead">
+    <h2>She is still down there</h2>
+    <p id="dead-reason">The colony tore you apart.</p>
+    <ul class="report">
+      <li><span>Died on</span><b id="dead-floor">—</b></li>
+      <li><span>Ants killed</span><b id="dead-kills">0</b></li>
+    </ul>
+    <button id="btn-retry" class="cta">Go again</button>
+    <p class="note">Or press R.</p>
+  </div>
+</section>
+
+<section id="screen-win" class="screen centre gone">
+  <div class="card win">
+    <h2>You got her out</h2>
+    <p>The Black Queen is dead on the floor of her own vault, and your queen is
+      behind you in the root channels, alive. A colony can be rebuilt from one
+      queen and one worker. That is what you are now.</p>
+    <ul class="report">
+      <li><span>Food carried</span><b id="stat-food">0</b></li>
+      <li><span>Ants killed</span><b id="stat-kills">0</b></li>
+      <li><span>Brood rescued</span><b id="stat-brood">0</b></li>
+      <li><span>Champions felled</span><b id="stat-bosses">0</b></li>
+      <li><span>Time underground</span><b id="stat-time">0:00</b></li>
+    </ul>
+    <button id="btn-again" class="cta">Run it again</button>
+  </div>
+</section>
+
+<script>
+function showFatal(msg) {
+  if (document.querySelector('.fatal')) return;
+  var el = document.createElement('div');
+  el.className = 'fatal';
+  el.textContent = msg;
+  document.body.appendChild(el);
+}
+addEventListener('error', function (e) {
+  // A blocked webfont or stylesheet is not fatal — the page has fallbacks.
+  if (e.target && e.target.tagName === 'LINK') return;
+  if (e.target && e.target.src) { showFatal('Could not load ' + e.target.src); return; }
+  // Cross-origin script errors arrive with no message; ignore those too.
+  if (!e.message || e.message === 'Script error.' || e.message === 'Script error') return;
+  showFatal(e.message);
+}, true);
+addEventListener('unhandledrejection', function (e) {
+  showFatal('Error: ' + ((e.reason && e.reason.message) || e.reason));
+});
+setTimeout(function () {
+  if (!window.game) showFatal('The game did not start. Press F12 and read the Console tab.');
+}, 12000);
+</script>
+
+<script type="importmap">
+{ "imports": { "three": "./three.module.js" } }
+</script>
+<script type="module" src="./game.js"></script>
+</body>
+</html>
