@@ -593,6 +593,7 @@ export function makeLeaf(size = 1, colour = 0x6f8f3a) {
   const mat = new THREE.MeshPhysicalMaterial({
     color: colour, roughness: 0.62, side: THREE.DoubleSide,
     clearcoat: 0.35, sheen: 0.5, sheenColor: new THREE.Color(0x9fc060),
+    emissive: new THREE.Color(0x4a7a1e), emissiveIntensity: 0,
   });
   const blade = new THREE.Mesh(geo, mat);
   blade.rotation.x = -Math.PI / 2;

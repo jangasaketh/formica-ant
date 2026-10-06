@@ -8,7 +8,7 @@
 
 // Bumped whenever the build changes, and shown on the title screen and the
 // pause card, so which version is live is never a guess.
-export const BUILD = 'v3 · playtest fixes';
+export const BUILD = 'v3.2 · survivable flood';
 
 export const SPAN = 300;          // world units across one burrow level
 export const FIELD = 220;         // heightfield resolution (FIELD x FIELD)
@@ -145,11 +145,12 @@ export const LEVELS = [
     tagline: 'Rain is getting in. When the water comes, ride a leaf.',
     foodNeeded: 8,
     rooms: 7, roomMin: 21, roomMax: 33, tunnelMin: 6, tunnelMax: 10,
-    height: [8, 15], hills: 9, loops: 3,
+    height: [8, 15], hills: 20, loops: 3,
+    hillRadius: [11, 24], hillHeight: [5.0, 9.0], flatTops: true,
     fog: 0x16292c, fogDensity: 0.013, lamp: 0x86cfdd, soil: 0x5b5340,
     enemies: { scout: 6, soldier: 3 },
     pickups: { crumb: 10, seed: 5, acid: 5, nectar: 2 },
-    repletes: 3, larvae: 4, leaves: 7, boss: 'tidecaller',
+    repletes: 3, larvae: 4, leaves: 12, boss: 'tidecaller',
     hazards: ['flood'],
   },
   {
@@ -181,11 +182,12 @@ export const LEVELS = [
     tagline: 'Everything left alive is between you and the way out.',
     foodNeeded: 12, final: true, timeLimit: 240,
     rooms: 8, roomMin: 22, roomMax: 36, tunnelMin: 6, tunnelMax: 11,
-    height: [9, 17], hills: 9, loops: 4,
+    height: [9, 17], hills: 18, loops: 4,
+    hillRadius: [10, 22], hillHeight: [4.5, 8.5], flatTops: true,
     fog: 0x2a0d08, fogDensity: 0.014, lamp: 0xff7a44, soil: 0x5a3324,
     enemies: { scout: 6, soldier: 6, bullet: 4, major: 2 },
     pickups: { crumb: 12, seed: 8, acid: 8, nectar: 4 },
-    repletes: 5, larvae: 6, boss: 'blackqueen',
+    repletes: 5, larvae: 6, leaves: 10, boss: 'blackqueen',
     hazards: ['flood', 'collapse', 'blockade'],
   },
 ];

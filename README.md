@@ -1,6 +1,6 @@
 # Formica — the deep burrow
 
-**Build v3** — playtest fixes. The title screen and the pause card show the
+**Build v3.2** — a survivable flood. The title screen and the pause card show the
 build string, so you can tell at a glance which version is live.
 
 What changed from v2, all from playtest feedback:
@@ -29,6 +29,44 @@ What changed from v2, all from playtest feedback:
   is still blocked.
 - **A reason to be down there.** Your queen was taken in a raid and is held on
   the fifth floor. Everything else is in service of getting her back.
+
+### v3.1
+
+- **Leaves are tracked.** They show on the map at all times, never fogged out,
+  with a pulsing halo once they are afloat. The flooded floors went from 7 and
+  3 leaves to 12 and 10.
+- **The objective bar takes over during a flood.** While the water is up and
+  you are not aboard, it turns blue, says *Get on a leaf*, and points at the
+  nearest one with its distance. Nothing else is shown until you are safe.
+- **Afloat leaves glow.** A leaf lights from inside once it comes loose, so it
+  reads across a dark flooded chamber rather than vanishing into the water.
+
+### v3.2 — the flood is survivable
+
+The second floor was killing people, and measuring it showed why: on the
+cistern floor **only 1.0% of the walkable ground stayed dry** when the water
+peaked. 95.2% of it drowned you. There was one summit above the line and
+nothing else, so unless you happened to be standing on it you died.
+
+Three changes, each measured rather than guessed at:
+
+- **High ground you can actually reach.** The flooded floors now get more
+  hills, wider and taller, and **flat tops** instead of cones — a plateau you
+  can stand and fight on rather than a point you slide off. Cistern: 1.0% dry
+  to **31.7% dry**, and 8 hills now hold a dry peak instead of 1.
+- **The water stops lower.** Its depth used to be set off the single tallest
+  hill, which one freak summit could drag up over everything else. It is now
+  derived from the spread of the floor itself — the level that leaves roughly a
+  fifth of the ground dry — so the flood scales with the floor it is flooding.
+- **A raft in every chamber.** Leaves were scattered at random, so some floors
+  left whole chambers without one, and leaves that landed on hilltops never
+  floated at all. Each chamber now gets one before any chamber gets two, and
+  within the chamber they settle on the low ground where the water will lift
+  them. Wherever you are when it starts rising, there is a leaf in the room.
+
+Tested: 6 out of 6 runs now survive the cistern by running for high ground,
+with the worst run ending on 174 of 190 health, and the raft carries you
+through the whole flood without a frame of swimming.
 
 A 3D browser game. You are a fire ant working down through five floors of a
 living ant burrow, feeding as you go, with the colony trying to kill you.
@@ -230,8 +268,11 @@ Nearly everything lives in `config.js`.
   `tunnelMin`, `tunnelMax` per level.
 - **More hills:** `hills`. More ways round: `loops`.
 - **Combat too hard:** raise `WEAPONS.acid.damage` or `PLAYER.maxHealth`.
-- **The flood:** its timing is in `hazards.js`, its depth follows the tallest
-  hill on the floor so there is always somewhere to climb.
+- **The flood:** its timing is in `hazards.js`. Its depth comes from
+  `#waterLineLeaving()` in the same file, which samples the floor and picks the
+  level that leaves `DRY_SHARE` of it above water — raise that constant to be
+  kinder. The islands themselves are `hills`, `hillRadius`, `hillHeight` and
+  `flatTops` per level in `config.js`, and `leaves` is how many rafts.
 - **Hauling crews:** `RECRUIT.hauling` is how many ants a plug needs,
   `haulTime` how long it takes.
 - **New enemy:** add to `ENEMY_TYPES`, list it in a level's `enemies`.

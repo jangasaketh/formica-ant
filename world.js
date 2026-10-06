@@ -305,8 +305,20 @@ export class World {
 
     // fallen leaves: ramps, landmarks, and rafts when the water comes
     const leafCount = def.leaves ?? 3;
+    const floods = def.hazards.includes('flood');
     for (let i = 0; i < leafCount; i++) {
-      const p = terrain.randomPoint();
+      // Every chamber gets one before any chamber gets two, so wherever you are
+      // standing when the water comes there is a raft in the room with you.
+      const room = terrain.rooms[i % terrain.rooms.length];
+      let p = terrain.pointInRoom(room);
+      if (floods) {
+        // Within the chamber, favour the low ground: a leaf stranded on a
+        // hilltop never floats, so it is no use as a raft.
+        for (let tries = 0; tries < 10; tries++) {
+          const c = terrain.pointInRoom(room);
+          if (terrain.floorAt(c.x, c.z) < terrain.floorAt(p.x, p.z)) p = c;
+        }
+      }
       const leaf = makeLeaf(1.6 + rng() * 1.5, [0x6f8f3a, 0x8a9b3c, 0x7d6a2c][i % 3]);
       leaf.position.set(p.x, terrain.floorAt(p.x, p.z) + 0.12, p.z);
       leaf.rotation.y = rng() * Math.PI * 2;

@@ -1053,10 +1053,12 @@ class Game {
 
     // ---- hazards first so water height is current ------------------------
     let waterY = null;
+    this.floodPhase = null;
     for (const h of this.hazards) {
       if (h instanceof Flood) {
         h.update(dt, p, t, (m, tone) => this.toast(m, tone));
         waterY = h.activeY;
+        this.floodPhase = h.phase;
       } else {
         h.update(dt, p, (m, tone) => this.toast(m, tone),
           (s) => { this.shake = Math.max(this.shake, s); this.audio.thud(); });
@@ -1064,6 +1066,7 @@ class Game {
     }
 
     for (const r of this.rafts) r.update(dt, waterY, terrain, baseY, t);
+    this.waterY = waterY;
 
     p.update(dt, this.input, world, this.yaw, t, { rafts: this.rafts });
 
@@ -1600,6 +1603,40 @@ class Game {
 
     let task, detail, goal = null;
 
+    // Nothing else matters while the water is up and you are not aboard.
+    const rising = this.floodPhase === 'rising' || this.floodPhase === 'deep';
+    if (rising && !p.raft) {
+      // whichever refuge is actually nearer: a floating leaf, or dry ground
+      let leaf = null, ld = Infinity;
+      for (const r of this.rafts) {
+        if (r.level !== p.level) continue;
+        const d = (r.pos.x - p.pos.x) ** 2 + (r.pos.z - p.pos.z) ** 2;
+        if (d < ld) { ld = d; leaf = r; }
+      }
+      const line = (this.waterY ?? lv.y) - lv.y;
+      const hill = terrain.nearestHighGround(p.pos.x, p.pos.z, line);
+      const hd = hill ? (hill.x - p.pos.x) ** 2 + (hill.z - p.pos.z) ** 2 : Infinity;
+
+      const useLeaf = leaf && (ld <= hd || !hill);
+      const target = useLeaf ? leaf.pos : hill;
+
+      box.classList.add('flood');
+      $('obj-task').textContent = p.swimming ? 'Get out of the water'
+        : (useLeaf ? 'Get on a leaf' : 'Get to high ground');
+      $('obj-detail').textContent = !target ? 'Climb anything you can find'
+        : useLeaf ? (leaf.afloat ? 'The nearest leaf is afloat' : 'Nearest leaf')
+        : 'A hilltop stands clear of the water';
+
+      if (target) {
+        const dx = target.x - p.pos.x, dz = target.z - p.pos.z;
+        $('obj-dist').textContent = `${Math.round(Math.hypot(dx, dz))}`;
+        const bearing = Math.atan2(dx, dz) - (this.yaw + Math.PI);
+        $('obj-arrow').style.transform = `rotate(${-bearing + Math.PI / 2}rad)`;
+      } else $('obj-dist').textContent = '';
+      return;
+    }
+    box.classList.remove('flood');
+
     if (this.boss && !this.boss.dead && this.boss.awake) {
       task = this.boss.raw.name;
       detail = 'It is holding the way down';
@@ -1727,6 +1764,44 @@ class Game {
       g.beginPath();
       g.arc(x, y, q.def.kind === 'food' ? 3.4 : 2.6, 0, 6.28);
       g.fill();
+    }
+
+    // ---- dry hilltops, while the water is up -----------------------------
+    if (this.waterY !== null && this.waterY !== undefined) {
+      const line = this.waterY - lv.y;
+      for (const h of lv.terrain.hills) {
+        if (h.h <= line + 0.4) continue;
+        const [x, y] = toMap(h.x, h.z);
+        const rr = Math.max(4, (h.r / SPAN) * S * 0.75);
+        g.fillStyle = 'rgba(150,200,140,0.22)';
+        g.beginPath(); g.arc(x, y, rr, 0, 6.28); g.fill();
+        g.strokeStyle = 'rgba(176,222,160,0.7)';
+        g.lineWidth = 1.5;
+        g.beginPath(); g.arc(x, y, rr, 0, 6.28); g.stroke();
+      }
+    }
+
+    // ---- leaves: your way out of a flood, so never fogged out -----------
+    for (const r of this.rafts) {
+      if (r.level !== p.level) continue;
+      const [x, y] = toMap(r.pos.x, r.pos.z);
+      const afloat = r.afloat;
+      if (afloat) {
+        // a soft halo so an afloat leaf is the brightest thing on the map
+        g.fillStyle = 'rgba(126,200,74,0.3)';
+        g.beginPath(); g.arc(x, y, 9 + Math.sin(t * 4) * 1.6, 0, 6.28); g.fill();
+      }
+      g.save();
+      g.translate(x, y);
+      g.rotate(t * 0.25 + x);
+      g.fillStyle = afloat ? '#9ade4a' : 'rgba(122,168,70,0.65)';
+      g.beginPath();
+      g.ellipse(0, 0, 5.5, 3, 0, 0, 6.28);
+      g.fill();
+      g.strokeStyle = afloat ? '#55892a' : 'rgba(70,100,40,0.7)';
+      g.lineWidth = 1;
+      g.beginPath(); g.moveTo(-5, 0); g.lineTo(5, 0); g.stroke();
+      g.restore();
     }
 
     // ---- honeypot larders: worth remembering -----------------------------

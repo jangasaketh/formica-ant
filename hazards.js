@@ -8,6 +8,9 @@
 import * as THREE from 'three';
 import { SPAN, MIN_HEADROOM } from './config.js';
 
+/** Share of the walkable floor that must stay above the water line. */
+const DRY_SHARE = 0.22;
+
 export class Flood {
   constructor(scene, world, levelIndex) {
     this.world = world;
@@ -16,10 +19,12 @@ export class Flood {
     this.baseY = lv.y;
     this.terrain = lv.terrain;
 
-    // high enough to drown the low ground, low enough to leave hilltops dry
-    let maxHill = 0;
-    for (const h of this.terrain.hills) maxHill = Math.max(maxHill, h.h);
-    this.maxHeight = Math.max(3.2, maxHill * 0.78);
+    // Pick the water line from the shape of the floor rather than from a
+    // magic multiple of the tallest hill. The old formula left barely one per
+    // cent of the ground dry, so "climb a hill" meant balancing on a summit.
+    // This samples the walkable floor and stops the water below a set share of
+    // it, which holds up whatever the generator produced.
+    this.maxHeight = this.#waterLineLeaving(lv, DRY_SHARE);
 
     this.height = -1.0;
     this.phase = 'dry';
@@ -41,6 +46,34 @@ export class Flood {
     this.mesh.position.y = this.baseY - 1;
     this.mesh.visible = false;
     scene.add(this.mesh);
+  }
+
+  /**
+   * Sample the floor across the level and return the height that leaves
+   * `share` of the walkable ground dry. Clamped so a flood is never trivial
+   * and never a death sentence.
+   */
+  #waterLineLeaving(lv, share) {
+    const t = this.terrain;
+    const heights = [];
+    const N = 110;
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        const x = -SPAN / 2 + (i / N) * SPAN;
+        const z = -SPAN / 2 + (j / N) * SPAN;
+        if (t.headAt(x, z) < MIN_HEADROOM) continue;
+        heights.push(t.floorAt(x, z));
+      }
+    }
+    if (!heights.length) return 3.2;
+    heights.sort((a, b) => a - b);
+    const idx = Math.floor(heights.length * (1 - share));
+    const line = heights[Math.min(idx, heights.length - 1)];
+
+    let tallest = 0;
+    for (const h of t.hills) tallest = Math.max(tallest, h.h);
+    // leave the biggest hill clearly proud of the water whatever happens
+    return Math.max(2.0, Math.min(line, tallest * 0.72));
   }
 
   get surfaceY() { return this.baseY + this.height; }

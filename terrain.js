@@ -191,19 +191,28 @@ export class Terrain {
     return seen;
   }
 
-  /** Soil hills inside chambers — high ground, cover, and flood refuge. */
+  /**
+   * Soil hills inside chambers — high ground, cover, and flood refuge.
+   * Floors that flood ask for broader, taller ones, because a hill is only
+   * refuge if its top is a platform rather than a point.
+   */
   #raiseHills() {
     const rng = this.rng;
-    for (let i = 0; i < this.def.hills; i++) {
+    const d = this.def;
+    const [rMin, rMax] = d.hillRadius ?? [6, 19];
+    const [hMin, hMax] = d.hillHeight ?? [2.2, 7.0];
+
+    for (let i = 0; i < d.hills; i++) {
       const room = this.rooms[Math.floor(rng() * this.rooms.length)];
       if (room === this.exit) continue;
       const a = rng() * Math.PI * 2;
-      const d = rng() * room.r * 0.55;
+      const dist = rng() * room.r * 0.55;
       this.hills.push({
-        x: room.x + Math.cos(a) * d,
-        z: room.z + Math.sin(a) * d,
-        r: 6 + rng() * 13,
-        h: 2.2 + rng() * (room.h * 0.42),
+        x: room.x + Math.cos(a) * dist,
+        z: room.z + Math.sin(a) * dist,
+        r: rMin + rng() * (rMax - rMin),
+        h: Math.min(hMin + rng() * (hMax - hMin), room.h * 0.62),
+        flat: !!d.flatTops,
       });
     }
   }
@@ -225,7 +234,14 @@ export class Terrain {
     let y = 0;
     for (const h of this.hills) {
       const t = Math.hypot(x - h.x, z - h.z) / h.r;
-      if (t < 1) y += h.h * fall(t) * fall(t * 0.85);
+      if (t >= 1) continue;
+      if (h.flat) {
+        // a plateau: full height across the inner half, then a slope down
+        const k = t < 0.5 ? 1 : fall((t - 0.5) / 0.5);
+        y += h.h * k;
+      } else {
+        y += h.h * fall(t) * fall(t * 0.85);
+      }
     }
     // fine soil ripple so the ground is never a flat plane
     y += Math.sin(x * 0.11) * Math.cos(z * 0.13) * 0.45;
@@ -434,6 +450,20 @@ export class Terrain {
       if (this.clearLine(fromX, fromZ, n.x, n.z)) return n;
     }
     return this.nodes[path[Math.min(1, path.length - 1)]];
+  }
+
+  /**
+   * The nearest hilltop standing clear of a given water line, so the game can
+   * point a drowning player at somewhere to stand.
+   */
+  nearestHighGround(x, z, waterLine) {
+    let best = null, bd = Infinity;
+    for (const h of this.hills) {
+      if (h.h <= waterLine + 0.4) continue;
+      const d = (h.x - x) ** 2 + (h.z - z) ** 2;
+      if (d < bd) { bd = d; best = h; }
+    }
+    return best ? { x: best.x, z: best.z, h: best.h } : null;
   }
 
   /** Tunnels that must be crossed to reach the exit — where plugs go. */

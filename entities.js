@@ -783,11 +783,16 @@ export class LeafRaft {
       this.mesh.rotation.y += this.spin * dt;
       this.mesh.rotation.z = Math.sin(this.bob * 1.3) * 0.045;
       this.mesh.rotation.x = Math.cos(this.bob * 1.1) * 0.045;
+      // light it from inside so it reads across a dark flooded chamber
+      const m = this.mesh.userData.mat;
+      if (m) m.emissiveIntensity = 0.5 + Math.sin(this.bob * 2.2) * 0.18;
     } else {
       this.drift.set(0, 0, 0);
       this.pos.y += (this.groundY - this.pos.y) * Math.min(1, dt * 4);
       this.mesh.rotation.z *= 0.9;
       this.mesh.rotation.x *= 0.9;
+      const m = this.mesh.userData.mat;
+      if (m) m.emissiveIntensity *= 0.9;
     }
     this.topY = this.pos.y + 0.2;
     this.mesh.position.set(this.pos.x, this.pos.y - this.baseY, this.pos.z);
