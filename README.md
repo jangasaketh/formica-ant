@@ -1,7 +1,7 @@
 # Formica — the deep burrow
 
-**Build v3.2** — a survivable flood. The title screen and the pause card show the
-build string, so you can tell at a glance which version is live.
+**Build v3.3** — it plays on a phone. The title screen and the pause card show
+the build string, so you can tell at a glance which version is live.
 
 What changed from v2, all from playtest feedback:
 
@@ -68,6 +68,58 @@ Tested: 6 out of 6 runs now survive the cistern by running for high ground,
 with the worst run ending on 174 of 190 health, and the raft carries you
 through the whole flood without a frame of swimming.
 
+### v3.3 — iOS and Android
+
+The same URL, no app, no install. Open it in Safari or Chrome on a phone and
+it switches to touch controls on its own.
+
+A phone has no pointer lock and no keyboard, so this is not the desktop
+scheme with buttons bolted on:
+
+- **Left thumb steers.** Press anywhere in the left half and a stick appears
+  under your thumb, wherever it landed — there is no small target to find
+  while something is chasing you. It is analog: push it gently and she creeps,
+  push it to the rim and she sprints. That is one less button than a sprint
+  toggle, and it is what a thumb wants to do anyway.
+- **Right thumb aims.** Drag to turn, exactly as the mouse does. Two fingers
+  pinch the camera in and out.
+- **The buttons sit under where the thumb already rests.** Acid and Fly in the
+  corner, with Bite beside them; Burst, Use, Call, Trail and Crew in a block
+  just above. The ones you have not earned yet are greyed out.
+- **The ammo count rides on the fire button**, because the desktop gun box
+  would be under your hand.
+- **The map became a button.** A 150px tile in the corner of a phone is
+  unreadable and in the way; tap Map and it fills the screen, tap anywhere to
+  put it away.
+- **The HUD moved out of both bottom corners.** Health, sprint, scent and
+  alarm are up under the floor name where no hand covers them.
+- **The briefing teaches thumbs, not keys.** Page two swaps itself out, and so
+  do the prompts on the power cards and the hints.
+
+Also in this build:
+
+- **Adaptive resolution.** Phone GPUs vary enormously, so rather than guess at
+  one setting it measures the frame time every second and moves the buffer
+  scale between 0.52 and 1.0 to hold the frame rate. Dropping pixels costs
+  sharpness; dropping frames costs the game. Multisampling is off on a phone,
+  and the pixel ratio is capped at 1.6 rather than 2.
+- **The ammo counter was broken on desktop too.** It tested the weapon's
+  `kind` against `'hitscan'`, which no weapon has ever been, so formic acid
+  always displayed as infinite even though it runs dry at 70 and trickles
+  back. It now shows the real number on every platform.
+- **Android gets real fullscreen** and a landscape lock when it starts. An
+  iPhone refuses the fullscreen API outright, so there the route is **Share →
+  Add to Home Screen** and opening it from the icon, which the briefing says.
+- **Play it sideways.** Portrait works, and a dismissible hint suggests
+  turning the phone.
+
+Tested on four emulated handsets — iPhone 15 and SE landscape, Pixel 8
+landscape, iPhone 15 portrait — driving real touch events through the browser:
+27 checks each, including that no HUD panel or button lands under a thumb, that
+no two buttons overlap, that every button clears 44px, that nothing falls off
+the edge of a notched screen, and that steering and firing work at the same
+time.
+
 A 3D browser game. You are a fire ant working down through five floors of a
 living ant burrow, feeding as you go, with the colony trying to kill you.
 
@@ -103,6 +155,22 @@ Or push all the files to a GitHub repo root and turn on Pages
 | Q | Hold to follow the scent trail when you are lost |
 | Tab | Hold for the tactical view, click to send your nestmates |
 | Esc | Pause · M mutes · R restarts from a death screen |
+
+### On a phone
+
+| Thumb | Action |
+| ----- | ------ |
+| Left half | Press anywhere for a stick. Gently to creep, to the rim to sprint |
+| Right half | Drag to look. Two fingers to pinch the camera in and out |
+| Acid / Bite | Hold to spray. Bite switches jaws |
+| Fly | Wing dash |
+| Burst · Use · Call · Trail | Hold Burst and Trail; tap Use and Call |
+| Crew | Hold for the command view, then tap the ground to send them |
+| Map · ❚❚ | Full-screen map · pause |
+
+Hold the phone sideways. For a proper full screen on an iPhone, use
+**Share → Add to Home Screen** and open it from the icon — iOS does not allow
+a web page to go fullscreen any other way.
 
 ## The story
 
@@ -256,6 +324,7 @@ models.js         the ant and everything else, generated in code
 entities.js       player, enemies, nestmates, repletes, brood, plugs, rafts
 hazards.js        flood and cave-in
 audio.js          the synthesised adaptive score
+touch.js          the phone controls: thumbsticks, buttons, rotation
 game.js           renderer, camera, input, combat, level flow, story, HUD
 three.module.js   three.js r160 (MIT, licence in LICENSE-three.txt)
 ```
@@ -287,6 +356,11 @@ Nearly everything lives in `config.js`.
 - **Wings:** `WING.dashSpeed`, `dashTime` and `dashCooldown`.
 - **New floor:** append to `LEVELS`. Burrow, shaft, lighting, dressing and
   spawns all generate from it.
+- **Touch feel:** `STICK_R` in `touch.js` is how far the thumb travels for
+  full push, `SPRINT_AT` the fraction of that which counts as running, and
+  `LOOK_X` / `LOOK_Y` the aim sensitivity.
+- **Phone performance:** `resScale` and `maxRatio` in the `Game` constructor
+  are the starting points; `#adapt()` moves `resScale` from there.
 
 The colony comes from the seed in `game.js` (`new World(this.scene, 20260927)`),
 so everyone gets the same five floors. Pass `Date.now()` for a fresh burrow

@@ -14,6 +14,7 @@ import {
 } from './entities.js';
 import { Flood, Collapse } from './hazards.js';
 import { Audio } from './audio.js';
+import { TouchControls, isTouch } from './touch.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -93,8 +94,16 @@ const ROOM_LABEL = {
 
 class Game {
   constructor() {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    // A phone has a very high pixel ratio and a fraction of the fill rate, so
+    // it is the one that cannot afford either multisampling or a 3x buffer.
+    this.touch = isTouch();
+    this.renderer = new THREE.WebGLRenderer({
+      antialias: !this.touch,
+      powerPreference: 'high-performance',
+    });
+    this.resScale = this.touch ? 0.82 : 1;     // the adaptive dial, see #adapt
+    this.maxRatio = this.touch ? 1.6 : 2;
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.maxRatio) * this.resScale);
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -151,8 +160,28 @@ class Game {
 
     this.#buildMotes();
     this.#bind();
+    if (this.touch) {
+      this.controls = new TouchControls(this);
+      this.#bindTouchAudio();
+    }
     this.#load();
     this.renderer.setAnimationLoop(() => this.#frame());
+  }
+
+  /**
+   * iOS will not start an AudioContext except inside a real user gesture, and
+   * a context created outside one stays suspended for the rest of the page's
+   * life. So the first touch anywhere resumes it, once.
+   */
+  #bindTouchAudio() {
+    const wake = () => {
+      this.audio.start();
+      this.audio.ctx?.resume?.();
+      removeEventListener('pointerdown', wake);
+      removeEventListener('touchend', wake);
+    };
+    addEventListener('pointerdown', wake, { once: false });
+    addEventListener('touchend', wake, { once: false });
   }
 
   // ------------------------------------------------------------- loading ---
@@ -196,11 +225,18 @@ class Game {
 
   // -------------------------------------------------------------- events ---
   #bind() {
-    addEventListener('resize', () => {
+    const fit = () => {
       this.camera.aspect = innerWidth / innerHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(innerWidth, innerHeight);
-    });
+      this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.maxRatio) * this.resScale);
+    };
+    addEventListener('resize', fit);
+    // Mobile Safari grows and shrinks the viewport as the address bar slides,
+    // and it reports that through visualViewport rather than a plain resize.
+    visualViewport?.addEventListener('resize', fit);
+    addEventListener('orientationchange', () => setTimeout(fit, 280));
+    this.fit = fit;
 
     const keys = {
       KeyW: 'forward', ArrowUp: 'forward', KeyS: 'back', ArrowDown: 'back',
@@ -252,7 +288,7 @@ class Game {
     const cv = this.renderer.domElement;
     cv.addEventListener('contextmenu', (e) => e.preventDefault());
     cv.addEventListener('mousedown', (e) => {
-      if (this.state !== 'playing') return;
+      if (this.state !== 'playing' || this.touch) return;
       if (document.pointerLockElement !== cv) { this.#grabPointer(); return; }
       if (this.tactical) { if (e.button === 0) this.#order(); return; }
       if (e.button === 0) this.input.fire = true;
@@ -273,6 +309,7 @@ class Game {
     }, { passive: true });
 
     document.addEventListener('pointerlockchange', () => {
+      if (this.touch) return;
       if (document.pointerLockElement === cv) {
         this.everLocked = true;
         this.lockBlocked = false;
@@ -283,7 +320,7 @@ class Game {
     });
     document.addEventListener('pointerlockerror', () => {
       // the browser's cool-off; try once more when it has passed
-      this.#grabPointer(1300);
+      if (!this.touch) this.#grabPointer(1300);
     });
 
     $('btn-start').onclick = () => this.start();
@@ -316,14 +353,17 @@ class Game {
     if (on) this.audio.tacticalIn(); else this.audio.tacticalOut();
   }
 
-  /** Plant a rally point under the cursor. */
-  #order() {
+  /**
+   * Plant a rally point. On a mouse the crosshair is the cursor, so the cast
+   * goes through the middle of the screen; on a phone the finger is the
+   * cursor, so the tap position comes in as normalised device coordinates.
+   */
+  #order(nx = 0, ny = 0) {
     const p = this.player;
     const lv = this.world.levels[p.level];
     const terrain = lv.terrain;
 
-    // cast from the middle of the screen — the crosshair is the cursor here
-    this.raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+    this.raycaster.setFromCamera(new THREE.Vector2(nx, ny), this.camera);
     const ray = this.raycaster.ray;
 
     // walk the ray until it meets the soil
@@ -367,12 +407,36 @@ class Game {
     this.#feed(`Nestmates ordered${this.recruits.length ? '' : ' — none to send'}`);
   }
 
+  // ------------------------------------------------------ touch front door --
+  /**
+   * The handful of actions a phone button needs to reach. The keyboard
+   * handlers call the private versions directly; these exist so `touch.js`
+   * does not have to know anything about the inside of this class.
+   */
+  setTactical(on) { this.#setTactical(on); }
+  orderAt(nx, ny) { this.#order(nx, ny); }
+  toggleWeapon() { this.#switch(this.player?.weapon === 'acid' ? 'bite' : 'acid'); }
+  interact() { this.#interact(); }
+  callNestmates() { this.#callNestmates(); }
+  drawMap() { if (this.state === 'playing') this.#drawMap(); }
+
+  /** What Space does: a dash with wings, a jump without. */
+  jumpOrDash() {
+    if (this.state !== 'playing') return;
+    if (!this.player?.powers.dash || !this.player.tryDash(this.yaw, this.input)) {
+      this.input.jump = true;
+    } else {
+      this.audio.dash();
+    }
+  }
+
   /**
    * Ask for the pointer lock, politely. A browser refuses for roughly a
    * second after the player has just left one, so a straight retry throws;
    * this swallows that and tries again once the cool-off has passed.
    */
   #grabPointer(delay = 0) {
+    if (this.touch) return;                    // no such thing on a phone
     const cv = this.renderer.domElement;
     if (document.pointerLockElement === cv) return;
     const ask = () => {
@@ -497,6 +561,24 @@ class Game {
     this.loadLevel(0, true);
     this.state = 'playing';
     this.#grabPointer(250);
+    if (this.touch) this.#goFullscreen();
+  }
+
+  /**
+   * Best effort, because the three platforms disagree. Android Chrome gives
+   * real fullscreen and will even lock the orientation once it has it, which
+   * reclaims the address bar. An iPhone refuses the Fullscreen API outright —
+   * there, adding the page to the home screen is the only route, which the
+   * briefing says. Every call here is allowed to fail silently.
+   */
+  async #goFullscreen() {
+    try {
+      if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+        await document.documentElement.requestFullscreen({ navigationUI: 'hide' });
+      }
+      await screen.orientation?.lock?.('landscape');
+    } catch { /* iOS, or the user said no. The game plays either way. */ }
+    this.fit?.();
   }
 
   restart() {
@@ -978,8 +1060,9 @@ class Game {
 
   #showPower(pw) {
     $('power-name').textContent = pw.label;
-    $('power-key').textContent = pw.key;
-    $('power-blurb').textContent = pw.blurb;
+    $('power-key').textContent = (this.touch ? pw.touch : pw.key) ?? pw.key;
+    $('power-blurb').textContent =
+      (this.touch ? pw.touchBlurb : pw.blurb) ?? pw.blurb;
     const el = $('powercard');
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   }
@@ -1028,11 +1111,42 @@ class Game {
     if (this.hudShown !== inPlay) {
       this.hudShown = inPlay;
       $('hud').style.opacity = inPlay ? '1' : '0';
+      // `inplay` keeps the corner pause button alive across the pause screen;
+      // `playing` is what the thumb pads hang off, so they vanish on a menu.
+      document.body.classList.toggle('inplay', inPlay);
+    }
+    const live = this.state === 'playing';
+    if (this.bodyPlaying !== live) {
+      this.bodyPlaying = live;
+      document.body.classList.toggle('playing', live);
     }
     if (this.state === 'playing') this.#update(dt, t);
     else if (this.state === 'story' && this.player) { this.#menuCam(t); this.#updateStory(raw); }
     else if (this.state === 'menu' && this.player) this.#menuCam(t);
     this.renderer.render(this.scene, this.camera);
+    if (this.touch) this.#adapt(raw);
+  }
+
+  /**
+   * Adaptive resolution. Phone GPUs vary by more than an order of magnitude,
+   * so rather than guess at one setting, measure the frame time and move the
+   * buffer scale until it fits. Dropping pixels costs sharpness; dropping
+   * frames costs the game, so pixels go first.
+   *
+   * It only ever steps once a second, and the band is wide, so it settles
+   * instead of oscillating between two scales.
+   */
+  #adapt(raw) {
+    this.fps = this.fps === undefined ? 60 : this.fps + (1 / Math.max(raw, 0.001) - this.fps) * 0.05;
+    this.adaptAt = (this.adaptAt ?? 0) + raw;
+    if (this.adaptAt < 1.1 || this.state !== 'playing') return;
+    this.adaptAt = 0;
+    const was = this.resScale;
+    if (this.fps < 38) this.resScale = Math.max(0.52, this.resScale - 0.1);
+    else if (this.fps > 56) this.resScale = Math.min(1, this.resScale + 0.06);
+    if (Math.abs(this.resScale - was) > 0.001) {
+      this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.maxRatio) * this.resScale);
+    }
   }
 
   #update(dt, t) {
@@ -1226,7 +1340,9 @@ class Game {
         this.gland.dispose(this.scene);
         this.gland = null;
         this.audio.power();
-        this.toast('Recruitment gland taken. Press C to call nestmates.', 'good');
+        this.toast(this.touch
+          ? 'Recruitment gland taken. Hit Call for nestmates.'
+          : 'Recruitment gland taken. Press C to call nestmates.', 'good');
         this.#feed('Power gained: call nestmates');
         this.#paintPowers();
       }
@@ -1500,7 +1616,11 @@ class Game {
     $('gun-name').textContent = w.name;
     $('slot-acid').classList.toggle('active', p.weapon === 'acid');
     $('slot-bite').classList.toggle('active', p.weapon === 'bite');
-    if (w.kind === 'hitscan') {
+    // Anything with a pool shows the pool. This used to test `kind` against
+    // 'hitscan', which no weapon has ever been, so acid always read as
+    // infinite even though it runs dry at 70 and trickles back.
+    const metered = w.ammoMax > 0;
+    if (metered) {
       $('ammo-count').textContent = Math.floor(p.ammo.acid);
       $('ammo-max').textContent = w.ammoMax;
       $('ammo-wrap').classList.remove('melee');
@@ -1510,6 +1630,18 @@ class Game {
       $('ammo-wrap').classList.add('melee');
     }
     document.documentElement.style.setProperty('--gun', w.hue);
+
+    // On a phone the fire button is the gun box: it carries its own count,
+    // and its label follows whichever jaw or gland is in use.
+    if (this.touch) {
+      const fire = $('tb-fire');
+      if (fire) {
+        fire.textContent = p.weapon === 'acid' ? 'Acid' : 'Bite';
+        fire.dataset.ammo = metered ? Math.floor(p.ammo.acid) : '';
+        fire.classList.toggle('dry', metered && p.ammo.acid < 1);
+      }
+      $('tb-bite').textContent = p.weapon === 'acid' ? 'Bite' : 'Acid';
+    }
   }
 
   #paintPowers() {
@@ -1520,6 +1652,7 @@ class Game {
     $('pw-burst').classList.toggle('have', p.powers.burst);
     $('pw-chitin').classList.toggle('have', p.powers.chitin);
     $('pw-call').classList.toggle('rallied', p.powers.rally);
+    this.controls?.refresh(p);
   }
 
   #hud(dt) {

@@ -120,10 +120,15 @@ export class Player {
     const fwd = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
     const right = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
     const d = new THREE.Vector3();
-    if (input.forward) d.add(fwd);
-    if (input.back) d.sub(fwd);
-    if (input.right) d.add(right);
-    if (input.left) d.sub(right);
+    if (input.analog) {
+      d.addScaledVector(fwd, -input.moveY);
+      d.addScaledVector(right, input.moveX);
+    } else {
+      if (input.forward) d.add(fwd);
+      if (input.back) d.sub(fwd);
+      if (input.right) d.add(right);
+      if (input.left) d.sub(right);
+    }
     if (d.lengthSq() < 0.001) d.copy(fwd);
     d.normalize();
     this.dashDir.copy(d);
@@ -178,11 +183,19 @@ export class Player {
     const fwd = new THREE.Vector3(-Math.sin(camYaw), 0, -Math.cos(camYaw));
     const right = new THREE.Vector3(Math.cos(camYaw), 0, -Math.sin(camYaw));
     const wish = new THREE.Vector3();
-    if (input.forward) wish.add(fwd);
-    if (input.back) wish.sub(fwd);
-    if (input.right) wish.add(right);
-    if (input.left) wish.sub(right);
-    const moving = wish.lengthSq() > 0.001;
+    if (input.analog) {
+      // A thumbstick gives a direction and a magnitude, so push gently and she
+      // creeps. The keyboard has no magnitude, so it stays all-or-nothing.
+      wish.addScaledVector(fwd, -input.moveY);
+      wish.addScaledVector(right, input.moveX);
+    } else {
+      if (input.forward) wish.add(fwd);
+      if (input.back) wish.sub(fwd);
+      if (input.right) wish.add(right);
+      if (input.left) wish.sub(right);
+    }
+    const push = input.analog ? Math.max(0.45, Math.min(1, wish.length())) : 1;
+    const moving = input.analog ? wish.lengthSq() > 0.012 : wish.lengthSq() > 0.001;
     if (moving) wish.normalize();
 
     this.sprinting = input.sprint && moving && this.stamina > 1 && !this.swimming && !this.crawling;
@@ -193,6 +206,7 @@ export class Player {
     if (this.crawling) top *= PLAYER.crawlFactor;
     if (this.swimming) top = PLAYER.swimSpeed;
     if (this.carrying) top *= 0.82;             // brood is heavy
+    if (moving) top *= push;                    // how far the thumbstick is over
 
     // a dash overrides ordinary walking for its third of a second
     if (this.dashTime > 0) {

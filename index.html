@@ -2,7 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#140d06" />
+<!-- Added to a phone home screen, it opens without the browser chrome, which
+     is the only way to get a genuinely full-screen game on an iPhone. -->
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Formica" />
 <title>Formica — the deep burrow</title>
 <meta name="description" content="A fire ant works her way down through five floors of a living ant burrow." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -47,7 +54,8 @@
 
   <div id="tacnote">
     <b>Tactical view</b>
-    <span>Click to send your nestmates · release Tab to drop back in</span>
+    <span class="key-only">Click to send your nestmates · release Tab to drop back in</span>
+    <span class="touch-only">Tap the ground to send your nestmates · let go of Crew to drop back in</span>
   </div>
 
   <div id="powercard">
@@ -118,6 +126,9 @@
     <p><b id="crop-have">0</b><em>of</em><span id="crop-need">6</span></p>
   </div>
 
+  <!-- dims the burrow behind the full-screen map, and closes it when tapped -->
+  <div id="mapscrim"></div>
+
   <div id="mapbox">
     <canvas id="minimap" width="260" height="260"></canvas>
     <ul id="maplegend">
@@ -128,6 +139,43 @@
       <li><i class="k-exit"></i>way down</li>
       <li><i class="k-foe"></i>hunting you</li>
     </ul>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------- touch controls -->
+<!-- Hidden until touch.js finds a coarse pointer. Two thumb zones underneath,
+     buttons on top of them, so a thumb on a button never also steers. -->
+<div id="touch" class="gone">
+  <div id="tlook" aria-hidden="true"></div>
+  <div id="tmove" aria-hidden="true"></div>
+
+  <div id="tstick"><i id="tknob"></i></div>
+
+  <!-- right thumb: the things used constantly -->
+  <div id="tpad">
+    <button id="tb-fire" class="tbtn big">Acid</button>
+    <button id="tb-dash" class="tbtn">Fly</button>
+    <button id="tb-bite" class="tbtn small">Bite</button>
+  </div>
+
+  <!-- right edge: the things used occasionally -->
+  <div id="tside">
+    <button id="tb-burst" class="tbtn small locked">Burst</button>
+    <button id="tb-use" class="tbtn small">Use</button>
+    <button id="tb-call" class="tbtn small locked">Call</button>
+    <button id="tb-trail" class="tbtn small">Trail</button>
+    <button id="tb-tac" class="tbtn small">Crew</button>
+  </div>
+
+  <div id="ttop">
+    <button id="tb-map" class="tbtn tiny">Map</button>
+    <button id="tb-pause" class="tbtn tiny">&#10073;&#10073;</button>
+  </div>
+
+  <div id="rotate-hint" class="gone">
+    <b>Turn your phone sideways</b>
+    <span>The burrow is wider than it is tall, and both thumbs get a corner.
+      Tap to dismiss.</span>
   </div>
 </div>
 
@@ -192,7 +240,8 @@
         <div class="brief-cell">
           <h3>When you are lost</h3>
           <p>The bar at the top always names your next job and points at it.
-            Hold <kbd>Q</kbd> and a scent trail shows you the way.</p>
+            Hold <kbd class="key-only">Q</kbd><kbd class="touch-only">Trail</kbd>
+            and a scent trail shows you the way.</p>
         </div>
       </div>
 
@@ -204,9 +253,42 @@
     <!-- page two: the controls, laid out as two columns -->
     <div class="brief-page gone" id="brief-2">
       <p class="brief-step">2 of 2 &middot; Controls</p>
-      <h2>Move with the arrows, fight with the rest</h2>
+      <h2 class="key-only">Move with the arrows, fight with the rest</h2>
+      <h2 class="touch-only">Left thumb walks, right thumb aims</h2>
 
-      <div class="ctrl-cols">
+      <!-- phones get their own page: the keyboard one would be a lie there -->
+      <div class="ctrl-cols touch-only">
+        <div class="ctrl-col">
+          <h3>Your thumbs</h3>
+          <ul class="ctrl-list">
+            <li><kbd class="t">&#9680;</kbd><span><b>Left half</b> — press anywhere and a
+              stick appears under your thumb. Push it gently to creep, push it
+              to the rim to sprint.</span></li>
+            <li><kbd class="t">&#8635;</kbd><span><b>Right half</b> — drag to look
+              around. Pinch with two fingers to pull the camera back.</span></li>
+          </ul>
+          <p class="ctrl-note">Play with the phone sideways. For a proper
+            full screen, add this page to your home screen and open it from
+            there.</p>
+        </div>
+
+        <div class="ctrl-col">
+          <h3>The buttons</h3>
+          <ul class="power-grid">
+            <li class="have"><kbd>Acid</kbd><b>Spray</b><span>Hold it down. Green vapour that keeps burning.</span></li>
+            <li class="have"><kbd>Fly</kbd><b>Wing dash</b><span>A burst of wings. Yours from the start.</span></li>
+            <li class="have"><kbd>Bite</kbd><b>Mandibles</b><span>Twice the damage, up close.</span></li>
+            <li><kbd>Burst</kbd><b>Acid burst</b><span>Hold to charge a wide cloud.</span></li>
+            <li class="have"><kbd>Use</kbd><b>Feed / carry</b><span>Drink from a honeypot ant.</span></li>
+            <li><kbd>Call</kbd><b>Nestmates</b><span>They fight and haul stone.</span></li>
+            <li class="have"><kbd>Trail</kbd><b>Scent</b><span>Hold when you are lost.</span></li>
+            <li class="have"><kbd>Crew</kbd><b>Command view</b><span>Hold, then tap the ground to send them.</span></li>
+          </ul>
+          <p class="ctrl-note">The greyed ones are taken from champions as you go down.</p>
+        </div>
+      </div>
+
+      <div class="ctrl-cols key-only">
         <div class="ctrl-col">
           <h3>Moving</h3>
           <div class="arrowpad">
@@ -277,7 +359,7 @@
       <li><span>Ants killed</span><b id="dead-kills">0</b></li>
     </ul>
     <button id="btn-retry" class="cta">Go again</button>
-    <p class="note">Or press R.</p>
+    <p class="note key-only">Or press R.</p>
   </div>
 </section>
 

@@ -8,7 +8,7 @@
 
 // Bumped whenever the build changes, and shown on the title screen and the
 // pause card, so which version is live is never a guess.
-export const BUILD = 'v3.2 · survivable flood';
+export const BUILD = 'v3.3 · phones';
 
 export const SPAN = 300;          // world units across one burrow level
 export const FIELD = 220;         // heightfield resolution (FIELD x FIELD)
@@ -239,12 +239,20 @@ export const BOSSES = {
   },
 };
 
-// What beating each champion unlocks.
+// What beating each champion unlocks. `key` is the keyboard prompt, `touch`
+// the on-screen button it maps to, because telling a phone to press Space is
+// no help at all.
 export const POWERS = {
-  glide:  { label: 'Long glide', key: 'Space', blurb: 'Hold Space after a dash and your wings carry you further.' },
-  burst:  { label: 'Acid burst', key: 'R', blurb: 'Hold R to charge a lungful, then release a wide cloud.' },
-  rally:  { label: 'Rally', key: 'C', blurb: 'Twice the nestmates answer, and they come back sooner.' },
-  chitin: { label: 'Chitin plating', key: '—', blurb: 'Hardened shell. Every bite takes a third less.' },
+  glide:  { label: 'Long glide', key: 'Space', touch: 'Fly',
+    blurb: 'Hold Space after a dash and your wings carry you further.',
+    touchBlurb: 'Keep Fly held after a dash and your wings carry you further.' },
+  burst:  { label: 'Acid burst', key: 'R', touch: 'Burst',
+    blurb: 'Hold R to charge a lungful, then release a wide cloud.',
+    touchBlurb: 'Hold Burst to charge a lungful, then let go for a wide cloud.' },
+  rally:  { label: 'Rally', key: 'C', touch: 'Call',
+    blurb: 'Twice the nestmates answer, and they come back sooner.' },
+  chitin: { label: 'Chitin plating', key: '—', touch: '—',
+    blurb: 'Hardened shell. Every bite takes a third less.' },
 };
 
 /*

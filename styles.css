@@ -633,3 +633,267 @@ html, body {
   .brief-grid, .ctrl-cols { grid-template-columns: 1fr; gap: 16px; }
   .power-grid { grid-template-columns: 1fr; }
 }
+
+/* ==========================================================================
+   TOUCH — phones and tablets.
+
+   Not the desktop layout with buttons added. The two bottom corners belong to
+   thumbs now, so everything that lived there moves up and out of the way: the
+   vitals go under the floor name, the gun box and the crop counter go
+   entirely (the fire button carries the ammo count, the objective bar already
+   carries the crop), and the minimap stops being a permanent corner tile and
+   becomes a full-screen overlay behind a button. What is left is the stuff you
+   read mid-fight, along the top where no hand covers it.
+   ========================================================================== */
+
+/* two sets of control prompts; one of them is always a lie */
+.touch-only { display: none; }
+body.touch .touch-only { display: revert; }
+body.touch .key-only { display: none !important; }
+
+body.touch {
+  /* no rubber-band, no pull-to-refresh, no double-tap zoom, no text select */
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+body.touch #app canvas { touch-action: none; }
+
+/* --------------------------------------------------------- the two zones -- */
+/* Above the menu and pause screens (z-index 10), because the corner pause
+   button has to work in both directions — a phone has no Escape key. The pads
+   themselves are gated on `body.playing` below, so they never sit over a menu. */
+#touch { position: fixed; inset: 0; z-index: 30; pointer-events: none; }
+#touch.gone { display: none; }
+
+/* Only while she is actually down there. On the title screen a fire button
+   would be both meaningless and in the way of the real buttons. */
+#tlook, #tmove, #tstick, #tpad, #tside { display: none; }
+body.playing #tlook,
+body.playing #tmove,
+body.playing #tstick { display: block; }
+body.playing #tpad,
+body.playing #tside { display: grid; }
+
+/* The pause button stays reachable while paused, which is the whole point. */
+#ttop { display: none; }
+body.inplay #ttop { display: flex; }
+
+/* These sit under the buttons and catch everything the buttons do not. The
+   split is down the middle: left thumb steers, right thumb aims. */
+#tlook, #tmove { position: absolute; top: 0; bottom: 0; pointer-events: auto; }
+#tlook { left: 50%; right: 0; }
+#tmove { left: 0; width: 50%; }
+
+/* The stick is drawn where the thumb lands, not at a fixed spot — chasing a
+   fixed circle while something is chasing you is a needless second task. */
+#tstick {
+  position: absolute; width: 124px; height: 124px; margin: -62px 0 0 -62px;
+  border-radius: 50%; border: 2px solid rgba(237,227,210,.26);
+  background: radial-gradient(circle, rgba(20,13,6,.42), rgba(20,13,6,.1) 70%);
+  opacity: 0; transition: opacity .14s; pointer-events: none;
+}
+#tstick.live { opacity: 1; }
+#tstick.run { border-color: rgba(242,163,60,.85); box-shadow: 0 0 22px rgba(242,163,60,.3); }
+#tknob {
+  position: absolute; left: 50%; top: 50%; width: 52px; height: 52px;
+  margin: 0; border-radius: 50%; transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 38% 32%, #f5e2c4, #bda278 70%, #6d5c43);
+  box-shadow: 0 3px 12px rgba(0,0,0,.6);
+}
+#tstick.run #tknob {
+  background: radial-gradient(circle at 38% 32%, #ffe0b0, var(--amber) 72%, #8a5a18);
+}
+
+/* ------------------------------------------------------------- buttons --- */
+.tbtn {
+  pointer-events: auto; -webkit-appearance: none; appearance: none;
+  font-family: var(--sans); font-weight: 600; letter-spacing: .05em;
+  color: var(--bone); text-transform: uppercase;
+  background: rgba(20,13,6,.62); border: 2px solid rgba(237,227,210,.3);
+  border-radius: 50%; display: grid; place-items: center;
+  transition: transform .06s, background .1s, border-color .1s;
+}
+.tbtn.big { width: 96px; height: 96px; font-size: 17px; border-color: rgba(242,213,74,.6); color: var(--gun); }
+.tbtn { width: 70px; height: 70px; font-size: 14px; }
+.tbtn.small { width: 58px; height: 58px; font-size: 12px; }
+.tbtn.tiny { width: 46px; height: 46px; font-size: 11px; border-radius: 10px; }
+.tbtn.down { transform: scale(.92); background: rgba(242,163,60,.42); border-color: var(--amber); }
+.tbtn.locked { opacity: .3; }
+
+/* the ammo count rides on the button that spends it */
+#tb-fire { position: relative; }
+#tb-fire::after {
+  content: attr(data-ammo); position: absolute; bottom: 7px; left: 0; right: 0;
+  font-size: 12px; font-weight: 500; color: #c9b79a; letter-spacing: .04em;
+}
+#tb-fire.dry { border-color: rgba(176,43,24,.8); color: #a08e78; }
+
+/* right thumb, bottom corner: spray, fly, bite */
+#tpad {
+  position: absolute; display: grid; gap: 10px; align-items: end; pointer-events: none;
+  right: calc(18px + env(safe-area-inset-right));
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  grid-template-areas: '.    fly' 'bite fire';
+  grid-template-columns: auto auto;
+}
+#tb-fire { grid-area: fire; }
+#tb-dash { grid-area: fly; }
+#tb-bite { grid-area: bite; }
+
+/* The occasional buttons, parked just above the fire pad so the right thumb
+   walks up to them. Anchored to the pad rather than centred on the screen:
+   centring put them straight through the pad on a short landscape phone. */
+#tside {
+  position: absolute; pointer-events: none;
+  right: calc(14px + env(safe-area-inset-right));
+  /* clears the pad: 18 bottom + 96 fire + 10 gap + 70 fly = 194 */
+  bottom: calc(206px + env(safe-area-inset-bottom));
+  display: grid; gap: 8px; justify-items: center;
+  grid-auto-flow: row;
+}
+
+#ttop {
+  position: absolute; pointer-events: none; top: calc(12px + env(safe-area-inset-top));
+  right: calc(14px + env(safe-area-inset-right));
+  display: flex; gap: 8px;
+}
+
+/* ------------------------------------------------------ the HUD, reflowed - */
+body.touch .powers,
+body.touch .gunbox,
+body.touch .crop,
+body.touch #clickhint { display: none; }
+
+body.touch .floorplate { top: calc(10px + env(safe-area-inset-top)); left: calc(14px + env(safe-area-inset-left)); }
+body.touch .floorplate h1 { font-size: 19px; }
+body.touch .floorplate p { font-size: 12px; }
+
+/* vitals out of the thumb's corner and up under the floor name */
+body.touch .vitals {
+  top: calc(56px + env(safe-area-inset-top)); bottom: auto;
+  left: calc(14px + env(safe-area-inset-left)); width: 168px; gap: 4px;
+}
+body.touch .vitals .hp b { font-size: 24px; }
+body.touch .tag { width: 38px; font-size: 10px; }
+body.touch .bar { height: 9px; }
+body.touch .bar.thin { height: 5px; }
+
+body.touch #objective {
+  top: calc(10px + env(safe-area-inset-top)); min-width: 0;
+  padding: 6px 11px; max-width: 48vw;
+}
+body.touch .obj-row { gap: 9px; }
+body.touch .obj-text b { font-size: 14px; }
+body.touch .obj-text span { font-size: 11.5px; }
+body.touch .obj-dist { font-size: 15px; }
+body.touch .obj-arrow { font-size: 19px; }
+
+body.touch #killfeed { top: calc(66px + env(safe-area-inset-top)); right: calc(74px + env(safe-area-inset-right)); }
+body.touch #killfeed li { font-size: 12px; padding: 1px 7px; }
+body.touch #bossbar { top: calc(60px + env(safe-area-inset-top)); width: 58vw; }
+body.touch #timer-wrap { top: auto; bottom: calc(8px + env(safe-area-inset-bottom)); }
+body.touch #timer-wrap strong { font-size: 21px; }
+body.touch #state-note { bottom: calc(124px + env(safe-area-inset-bottom)); font-size: 13px; }
+body.touch #burst-wrap { left: 50%; transform: translateX(-50%); bottom: calc(100px + env(safe-area-inset-bottom)); width: 190px; }
+body.touch #banner { top: 18%; }
+body.touch #banner h2 { font-size: 27px; }
+/* Centred at 38% down, this card reached into both thumb corners on a short
+   landscape screen. Up top and narrower, it clears them. */
+body.touch #powercard {
+  top: 22%; width: min(330px, 62vw); padding: 12px 16px;
+}
+body.touch #powercard h2 { font-size: 21px; margin-bottom: 5px; }
+body.touch #powercard p { font-size: 12.5px; }
+body.touch .pc-eyebrow { font-size: 10.5px; }
+/* Clear of the pads. In portrait the pads are taller, so it goes higher
+   still — a message you cannot read under your own hand is not a message. */
+body.touch #toast { max-width: 76vw; font-size: 14px; bottom: calc(166px + env(safe-area-inset-bottom)); }
+@media (orientation: portrait) {
+  body.touch #toast { bottom: calc(230px + env(safe-area-inset-bottom)); }
+  body.touch #state-note { bottom: calc(260px + env(safe-area-inset-bottom)); }
+  body.touch #burst-wrap { bottom: calc(200px + env(safe-area-inset-bottom)); }
+  body.touch #timer-wrap { bottom: calc(150px + env(safe-area-inset-bottom)); }
+}
+body.touch #room-label { font-size: 22px; }
+
+/* ----------------------------------------------------------- the big map -- */
+/* A 150px tile in the corner of a phone is unreadable and in the way, so the
+   map is a button: tap it and it fills the screen, tap again and it is gone. */
+body.touch #mapbox {
+  left: 50%; top: 50%; right: auto;
+  transform: translate(-50%, -50%) scale(.6);
+  opacity: 0; pointer-events: none; transition: opacity .16s, transform .16s;
+}
+body.touch.bigmap #mapbox { opacity: 1; transform: translate(-50%, -50%); }
+body.touch #minimap {
+  width: min(78vw, 78vh); height: min(78vw, 78vh);
+  background: rgba(10,7,4,.96); border-color: rgba(237,227,210,.4);
+}
+body.touch #maplegend { justify-content: center; font-size: 11px; gap: 3px 10px; }
+body.touch.bigmap #tb-map { background: rgba(242,163,60,.42); border-color: var(--amber); }
+
+/* Tap anywhere off the map to put it away — faster than finding the button
+   again, and it stops a stray thumb walking the ant about behind it. */
+#mapscrim { position: fixed; inset: 0; background: rgba(6,4,2,.72); opacity: 0; pointer-events: none; transition: opacity .16s; }
+body.touch.bigmap #mapscrim { opacity: 1; pointer-events: auto; }
+/* While the map is open the HUD rises above the thumb zones, so the scrim —
+   not the look zone underneath it — is what a tap lands on. */
+body.touch.bigmap #hud { z-index: 40; }
+
+/* ---------------------------------------------------------- rotate hint --- */
+#rotate-hint {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(300px, 82vw); padding: 18px 20px; text-align: center;
+  background: rgba(14,9,5,.95); border: 1px solid var(--amber);
+  pointer-events: auto; z-index: 3;
+}
+#rotate-hint.gone { display: none; }
+#rotate-hint b { display: block; font-family: var(--serif); font-size: 20px; margin-bottom: 7px; }
+#rotate-hint span { font-size: 13.5px; color: #a4927a; line-height: 1.45; }
+
+/* ------------------------------------------------- menus on a small phone - */
+body.touch .screen { padding: 14px; }
+body.touch .plate { max-width: 92vw; }
+body.touch .plate .title { font-size: 46px; }
+body.touch .plate .lede { font-size: 14px; }
+body.touch .brief { padding: 18px 15px 14px; max-height: 92vh; }
+body.touch .brief h2 { font-size: 21px; }
+body.touch .cta { padding: 11px 20px; font-size: 16px; }  /* 44px tall: thumb-sized */
+body.touch .power-grid span { font-size: 12px; }
+body.touch .ctrl-list kbd.t { font-size: 17px; }
+
+/* A phone held sideways is short. Below this the briefing has to scroll, so
+   give it one column and let it. */
+/* A phone held sideways is 375 to 420px tall, and the side buttons have to
+   live in the strip between the top bar and the fire pad. One column is far
+   too tall for that, so they wrap into a block instead — two columns where
+   there is room, three on the shortest screens. */
+@media (max-height: 620px) {
+  body.touch #tside {
+    grid-template-columns: repeat(2, auto);
+    direction: rtl;                 /* fill from the right edge inwards */
+    gap: 7px;
+  }
+  body.touch #tside .tbtn { direction: ltr; }
+}
+
+@media (max-height: 460px) {
+  body.touch .brief { max-height: 96vh; overflow: auto; }
+  body.touch .brief h2 { font-size: 18px; }
+  body.touch .plate .title { font-size: 34px; }
+  body.touch .plate .lede { display: none; }
+  body.touch .tbtn.small { width: 48px; height: 48px; font-size: 10.5px; }
+  body.touch .tbtn.big { width: 82px; height: 82px; font-size: 15px; }
+  body.touch .tbtn { width: 60px; height: 60px; font-size: 12px; }
+  body.touch #tpad { gap: 8px; }
+  /* the pad shrinks with the buttons: 18 + 82 + 8 + 60 = 168 */
+  body.touch #tside { bottom: calc(182px + env(safe-area-inset-bottom)); }
+}
+
+/* Shorter still — an SE on its side. Three columns, two rows. */
+@media (max-height: 400px) {
+  body.touch #tside { grid-template-columns: repeat(3, auto); }
+}
