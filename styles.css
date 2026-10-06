@@ -721,6 +721,8 @@ body.inplay #ttop { display: flex; }
 .tbtn.small { width: 58px; height: 58px; font-size: 12px; }
 .tbtn.tiny { width: 46px; height: 46px; font-size: 11px; border-radius: 10px; }
 .tbtn.down { transform: scale(.92); background: rgba(242,163,60,.42); border-color: var(--amber); }
+/* a latched state — lit, but not pressed, so no scale */
+.tbtn.on { background: rgba(242,163,60,.42); border-color: var(--amber); }
 .tbtn.locked { opacity: .3; }
 
 /* the ammo count rides on the button that spends it */
@@ -842,6 +844,20 @@ body.touch.bigmap #mapscrim { opacity: 1; pointer-events: auto; }
 /* While the map is open the HUD rises above the thumb zones, so the scrim —
    not the look zone underneath it — is what a tap lands on. */
 body.touch.bigmap #hud { z-index: 40; }
+
+/* --------------------------------------------------------- the iOS card --- */
+#fullhint {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(360px, 88vw); padding: 20px 22px; text-align: left;
+  background: rgba(14,9,5,.97); border: 1px solid var(--amber);
+  pointer-events: auto; z-index: 5; box-shadow: 0 24px 70px rgba(0,0,0,.85);
+}
+#fullhint.gone { display: none; }
+#fullhint > b { display: block; font-family: var(--serif); font-size: 19px; margin-bottom: 9px; }
+#fullhint span { display: block; font-size: 14px; color: #c3b29a; line-height: 1.5; }
+#fullhint span b { color: var(--bone); }
+#fullhint .cta { margin-top: 15px; }
+#tb-full { font-size: 17px; }
 
 /* ---------------------------------------------------------- rotate hint --- */
 #rotate-hint {

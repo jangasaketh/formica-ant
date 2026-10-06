@@ -1,7 +1,8 @@
 # Formica — the deep burrow
 
-**Build v3.3** — it plays on a phone. The title screen and the pause card show
-the build string, so you can tell at a glance which version is live.
+**Build v3.4** — the phone camera follows her, and the render is fixed. The
+title screen and the pause card show the build string, so you can tell at a
+glance which version is live.
 
 What changed from v2, all from playtest feedback:
 
@@ -115,10 +116,45 @@ Also in this build:
 
 Tested on four emulated handsets — iPhone 15 and SE landscape, Pixel 8
 landscape, iPhone 15 portrait — driving real touch events through the browser:
-27 checks each, including that no HUD panel or button lands under a thumb, that
-no two buttons overlap, that every button clears 44px, that nothing falls off
-the edge of a notched screen, and that steering and firing work at the same
+checks on each one including that no HUD panel or button lands under a thumb,
+that no two buttons overlap, that every button clears 44px, that nothing falls
+off the edge of a notched screen, and that steering and firing work at the same
 time.
+
+### v3.4 — the camera follows her, and the pixels are fixed
+
+**The blocky render is gone, and it was measurable.** The adaptive scaler was
+allowed to fall to 0.52, which meant the drawing buffer was *smaller than the
+element it sits in* — on a phone at device-pixel-ratio 3 the browser was
+stretching a 708-pixel-wide image across a 2556-pixel screen. Measured on an
+emulated iPhone: 0.83 buffer pixels per CSS pixel. The floor is now 1.0, so it
+never renders below native and the browser never upscales. A phone that cannot
+hold native resolution gets a lower frame rate instead; it never gets a broken
+picture. The buffer is also sized from the element the canvas actually
+occupies rather than from `innerWidth`/`innerHeight`, which disagree on mobile
+Safari while the address bar is sliding — another way the same stretch happened.
+
+**No more looking around on a phone.** The camera simply stays at her back and
+swings to whichever way she walks, so forward is always forward and you can
+see where you are going. She fires wherever she is facing, and the camera sits
+dead centre rather than over her shoulder, so what is under the crosshair is
+what is in front of her.
+
+The part worth knowing about: a camera that chases your heading, combined with
+a stick measured against that same camera, makes you **spiral** — push right,
+the camera swings right, so "right" now means somewhere else, and you circle.
+The fix is that the stick captures the camera direction when your thumb settles
+on a heading and freezes it, re-capturing only when your thumb genuinely points
+somewhere else. Measured: holding one direction for three seconds drifts the
+heading by **0 degrees**, and changing direction swings the camera 89 degrees
+and settles 1 degree off her back.
+
+**A full-screen button**, top-right, and on the title screen. Android gets real
+fullscreen plus a landscape lock. Safari on iPhone has no Fullscreen API at all
+— it is not exposed on anything but a video element — so there the button
+explains the one thing that does work: **Share → Add to Home Screen**, then
+open Formica from the icon. It then runs with no address bar and no toolbar.
+The button hides itself when you are already running that way.
 
 A 3D browser game. You are a fire ant working down through five floors of a
 living ant burrow, feeding as you go, with the colony trying to kill you.
@@ -161,16 +197,18 @@ Or push all the files to a GitHub repo root and turn on Pages
 | Thumb | Action |
 | ----- | ------ |
 | Left half | Press anywhere for a stick. Gently to creep, to the rim to sprint |
-| Right half | Drag to look. Two fingers to pinch the camera in and out |
+| The camera | Follows her by itself — no looking around. She fires where she faces |
+| Right half | Two fingers to pinch the camera in and out |
 | Acid / Bite | Hold to spray. Bite switches jaws |
 | Fly | Wing dash |
 | Burst · Use · Call · Trail | Hold Burst and Trail; tap Use and Call |
 | Crew | Hold for the command view, then tap the ground to send them |
-| Map · ❚❚ | Full-screen map · pause |
+| ⛶ · Map · ❚❚ | Full screen · full-screen map · pause |
 
-Hold the phone sideways. For a proper full screen on an iPhone, use
-**Share → Add to Home Screen** and open it from the icon — iOS does not allow
-a web page to go fullscreen any other way.
+Hold the phone sideways. On Android the ⛶ button gives you real fullscreen. On
+an iPhone it cannot — Safari has no Fullscreen API for a web page — so use
+**Share → Add to Home Screen** and open it from the icon instead, which runs
+with no address bar at all. The button tells you this when you tap it.
 
 ## The story
 
@@ -358,9 +396,13 @@ Nearly everything lives in `config.js`.
   spawns all generate from it.
 - **Touch feel:** `STICK_R` in `touch.js` is how far the thumb travels for
   full push, `SPRINT_AT` the fraction of that which counts as running, and
-  `LOOK_X` / `LOOK_Y` the aim sensitivity.
-- **Phone performance:** `resScale` and `maxRatio` in the `Game` constructor
-  are the starting points; `#adapt()` moves `resScale` from there.
+  `REAIM` how far the thumb must swing before the movement frame re-captures.
+- **Phone camera:** `#followCamera()` in `game.js` — the `5.5` is how fast it
+  swings round behind her, and `0.30` is the pitch it settles at.
+- **Phone performance:** `pixMin`, `pixMax` and `pixRatio` in the `Game`
+  constructor; `#adapt()` moves `pixRatio` between the two. **Never let
+  `pixMin` go below 1** — that is rendering smaller than the screen and it
+  looks broken, not soft.
 
 The colony comes from the seed in `game.js` (`new World(this.scene, 20260927)`),
 so everyone gets the same five floors. Pass `Date.now()` for a fresh burrow

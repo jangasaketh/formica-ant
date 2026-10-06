@@ -8,7 +8,7 @@
 
 // Bumped whenever the build changes, and shown on the title screen and the
 // pause card, so which version is live is never a guess.
-export const BUILD = 'v3.3 · phones';
+export const BUILD = 'v3.4 · follow camera';
 
 export const SPAN = 300;          // world units across one burrow level
 export const FIELD = 220;         // heightfield resolution (FIELD x FIELD)

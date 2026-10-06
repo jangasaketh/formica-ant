@@ -168,8 +168,21 @@
   </div>
 
   <div id="ttop">
+    <button id="tb-full" class="tbtn tiny">&#9974;</button>
     <button id="tb-map" class="tbtn tiny">Map</button>
     <button id="tb-pause" class="tbtn tiny">&#10073;&#10073;</button>
+  </div>
+
+  <!-- Shown only where the browser has no Fullscreen API at all, which in
+       practice means an iPhone. Safari on iOS will not let a web page go
+       fullscreen by any means except being installed to the home screen. -->
+  <div id="fullhint" class="gone">
+    <b>iPhone needs one extra step</b>
+    <span>Safari will not let a web page fill the screen on its own. Tap the
+      <b>Share</b> button at the bottom of Safari, choose <b>Add to Home
+      Screen</b>, then open Formica from that icon — it runs with no address
+      bar and no toolbar at all.</span>
+    <button id="fullhint-ok" class="cta small">Got it</button>
   </div>
 
   <div id="rotate-hint" class="gone">
@@ -206,6 +219,7 @@
       <button id="btn-brief" class="cta">How to play</button>
       <button id="btn-story" class="cta ghost">Watch the story</button>
       <button id="btn-start" class="cta ghost">Jump straight in</button>
+      <button id="btn-full" class="cta ghost touch-only">Full screen</button>
     </div>
     <p class="note">First time? Start with <b>How to play</b> — two short pages.</p>
     <p class="build" id="build-tag"></p>
@@ -254,7 +268,7 @@
     <div class="brief-page gone" id="brief-2">
       <p class="brief-step">2 of 2 &middot; Controls</p>
       <h2 class="key-only">Move with the arrows, fight with the rest</h2>
-      <h2 class="touch-only">Left thumb walks, right thumb aims</h2>
+      <h2 class="touch-only">One thumb walks, the camera does the rest</h2>
 
       <!-- phones get their own page: the keyboard one would be a lie there -->
       <div class="ctrl-cols touch-only">
@@ -264,12 +278,15 @@
             <li><kbd class="t">&#9680;</kbd><span><b>Left half</b> — press anywhere and a
               stick appears under your thumb. Push it gently to creep, push it
               to the rim to sprint.</span></li>
-            <li><kbd class="t">&#8635;</kbd><span><b>Right half</b> — drag to look
-              around. Pinch with two fingers to pull the camera back.</span></li>
+            <li><kbd class="t">&#9679;</kbd><span><b>The camera follows her.</b>
+              There is nothing to look around with — it stays at her back and
+              swings to whichever way you walk, so forward is always forward.
+              You fire wherever she is facing.</span></li>
+            <li><kbd class="t">&#8597;</kbd><span>Pinch with two fingers to pull
+              the camera in or out.</span></li>
           </ul>
-          <p class="ctrl-note">Play with the phone sideways. For a proper
-            full screen, add this page to your home screen and open it from
-            there.</p>
+          <p class="ctrl-note">Play with the phone sideways, and use the
+            <b>&#9974;</b> button for full screen.</p>
         </div>
 
         <div class="ctrl-col">

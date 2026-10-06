@@ -41,8 +41,7 @@ export function isTouch() {
 
 const STICK_R = 54;      // px the knob may travel before it is at full push
 const SPRINT_AT = 0.88;  // fraction of that travel which means "run"
-const LOOK_X = 0.0042;   // radians per pixel dragged
-const LOOK_Y = 0.0034;
+const REAIM = 0.34;      // radians of thumb movement that counts as a new heading
 
 export class TouchControls {
   /**
@@ -55,9 +54,10 @@ export class TouchControls {
     this.knob = $('tknob');
 
     this.moveId = null;      // pointerId steering
-    this.lookId = null;      // pointerId aiming
+    this.lookId = null;      // pointerId on the right-hand zone
     this.origin = { x: 0, y: 0 };
     this.pinch = null;
+    this.aimAngle = null;    // thumb heading the movement frame was captured at
 
     document.body.classList.add('touch');
     this.layer.classList.remove('gone');
@@ -68,6 +68,7 @@ export class TouchControls {
 
     this.#bindSticks();
     this.#bindButtons();
+    this.#bindFullscreen();
     this.#bindOrientation();
   }
 
@@ -86,6 +87,7 @@ export class TouchControls {
       this.stick.style.left = `${e.clientX}px`;
       this.stick.style.top = `${e.clientY}px`;
       this.stick.classList.add('live');
+      this.aimAngle = null;            // first push of this gesture sets the frame
       grab(zone, e.pointerId);
       e.preventDefault();
     });
@@ -104,8 +106,10 @@ export class TouchControls {
     zone.addEventListener('pointerup', drop);
     zone.addEventListener('pointercancel', drop);
 
-    // Aiming. Dragging anywhere in the right-hand zone turns the camera, which
-    // is the pointer-lock mouse look with the lock taken out.
+    // The right-hand zone no longer turns the camera — the camera follows her
+    // by itself now, so there is nothing to aim. What is left is pinch to
+    // change the camera distance, and the tap that plants a rally point while
+    // the command view is up.
     look.addEventListener('pointerdown', (e) => {
       if (this.lookId === null) {
         this.lookId = e.pointerId;
@@ -114,7 +118,6 @@ export class TouchControls {
         this.moved = 0;
         grab(look, e.pointerId);
       } else if (this.pinch === null) {
-        // a second finger in the look zone: pinch to pull the camera back
         this.pinch = { id: e.pointerId, x: e.clientX, y: e.clientY, base: this.game.camDist };
       }
       e.preventDefault();
@@ -122,11 +125,8 @@ export class TouchControls {
     look.addEventListener('pointermove', (e) => {
       const g = this.game;
       if (e.pointerId === this.lookId) {
-        const dx = e.clientX - this.lastX, dy = e.clientY - this.lastY;
+        this.moved += Math.abs(e.clientX - this.lastX) + Math.abs(e.clientY - this.lastY);
         this.lastX = e.clientX; this.lastY = e.clientY;
-        this.moved += Math.abs(dx) + Math.abs(dy);
-        g.yaw -= dx * LOOK_X;
-        g.pitch = Math.max(-0.5, Math.min(0.95, g.pitch + dy * LOOK_Y));
       } else if (this.pinch && e.pointerId === this.pinch.id) {
         const spread = Math.hypot(e.clientX - this.lastX, e.clientY - this.lastY);
         if (!this.pinch.start) this.pinch.start = spread;
@@ -151,7 +151,19 @@ export class TouchControls {
     look.addEventListener('pointercancel', lookUp);
   }
 
-  /** Knob position in, movement intent out. */
+  /**
+   * Knob position in, movement intent out.
+   *
+   * The subtle part is `frameYaw`: the camera direction the thumb's push is
+   * measured against. The camera now swings to follow wherever she walks, so
+   * if the push were measured against the *live* camera, "right" would keep
+   * rotating as the camera turned and she would spiral.
+   *
+   * So the frame is captured and frozen while the thumb holds a heading, which
+   * walks a straight line, and re-captured the moment the thumb genuinely
+   * points somewhere else — which is exactly when the player wants "up" to
+   * mean up the screen again.
+   */
   #steer(dx, dy) {
     const len = Math.hypot(dx, dy);
     const k = len > STICK_R ? STICK_R / len : 1;
@@ -159,6 +171,19 @@ export class TouchControls {
     this.knob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
 
     const inp = this.game.input;
+    if (len / STICK_R > 0.3) {
+      const a = Math.atan2(y, x);
+      const turned = this.aimAngle === null
+        || Math.abs(Math.atan2(Math.sin(a - this.aimAngle), Math.cos(a - this.aimAngle))) > REAIM;
+      if (turned) {
+        this.aimAngle = a;
+        inp.frameYaw = this.game.yaw;
+      }
+    } else {
+      this.aimAngle = null;            // back near centre: re-aim from scratch
+      inp.frameYaw = this.game.yaw;
+    }
+
     inp.moveX = x / STICK_R;
     inp.moveY = y / STICK_R;
     inp.sprint = len / STICK_R > SPRINT_AT;
@@ -222,6 +247,7 @@ export class TouchControls {
     tap('tb-use', () => g.interact());
     tap('tb-call', () => g.callNestmates());
     tap('tb-pause', () => (g.state === 'playing' ? g.pause() : g.resume()));
+    tap('tb-full', () => this.toggleFullscreen());
     tap('tb-map', () => {
       document.body.classList.toggle('bigmap');
       g.drawMap?.();
@@ -232,6 +258,80 @@ export class TouchControls {
       document.body.classList.remove('bigmap');
       e.preventDefault(); e.stopPropagation();
     });
+  }
+
+  // ------------------------------------------------------------ fullscreen --
+  /**
+   * Is the page already filling the screen? Either because it is in a
+   * fullscreen element, or because it was launched from a home-screen icon,
+   * which is how iOS does it.
+   */
+  static get standalone() {
+    return !!document.fullscreenElement
+      || !!document.webkitFullscreenElement
+      || navigator.standalone === true
+      || (matchMedia?.('(display-mode: standalone)').matches ?? false);
+  }
+
+  /** Does this browser have the Fullscreen API at all? iPhone Safari does not. */
+  static get canFullscreen() {
+    const el = document.documentElement;
+    return !!(el.requestFullscreen || el.webkitRequestFullscreen);
+  }
+
+  /**
+   * Fullscreen on demand, and an honest answer when it is not possible.
+   *
+   * Android Chrome and iPadOS have the API. Safari on iPhone does not expose
+   * it on anything but a video element, so no amount of trying will work
+   * there — rather than fail silently, say what does work, which is Add to
+   * Home Screen.
+   */
+  async toggleFullscreen() {
+    const el = document.documentElement;
+    try {
+      if (document.fullscreenElement || document.webkitFullscreenElement) {
+        await (document.exitFullscreen?.() ?? document.webkitExitFullscreen?.());
+        this.#markFull();
+        return;
+      }
+      if (!TouchControls.canFullscreen) { this.#iosHint(); return; }
+      await (el.requestFullscreen?.({ navigationUI: 'hide' }) ?? el.webkitRequestFullscreen?.());
+      try { await screen.orientation?.lock?.('landscape'); } catch { /* optional */ }
+    } catch {
+      this.#iosHint();
+    }
+    this.#markFull();
+    this.game.fit?.();
+  }
+
+  #markFull() {
+    const on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    // `on`, not `down` — `down` is the press animation and carries a scale,
+    // which would shrink the button for as long as fullscreen lasted.
+    $('tb-full')?.classList.toggle('on', on);
+    const b = $('btn-full');
+    if (b) b.textContent = on ? 'Leave full screen' : 'Full screen';
+  }
+
+  #iosHint() {
+    const el = $('fullhint');
+    if (!el) return;
+    el.classList.remove('gone');
+  }
+
+  #bindFullscreen() {
+    $('btn-full')?.addEventListener('click', () => this.toggleFullscreen());
+    $('fullhint-ok')?.addEventListener('click', () => $('fullhint').classList.add('gone'));
+    document.addEventListener('fullscreenchange', () => { this.#markFull(); this.game.fit?.(); });
+    document.addEventListener('webkitfullscreenchange', () => { this.#markFull(); this.game.fit?.(); });
+
+    // Already filling the screen from a home-screen icon? Then there is
+    // nothing to offer, and a dead button is worse than no button.
+    if (TouchControls.standalone) {
+      $('tb-full')?.classList.add('gone');
+      $('btn-full')?.classList.add('gone');
+    }
   }
 
   // -------------------------------------------------------------- rotation --

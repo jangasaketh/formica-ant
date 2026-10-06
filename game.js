@@ -101,9 +101,17 @@ class Game {
       antialias: !this.touch,
       powerPreference: 'high-performance',
     });
-    this.resScale = this.touch ? 0.82 : 1;     // the adaptive dial, see #adapt
-    this.maxRatio = this.touch ? 1.6 : 2;
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.maxRatio) * this.resScale);
+
+    // Buffer pixels per CSS pixel. The floor is 1: below that the browser is
+    // upscaling an image smaller than the element it sits in, and on a phone
+    // at device-pixel-ratio 3 that reads as raw blockiness. Trading sharpness
+    // for frame rate is fine; going under native resolution is not.
+    this.pixMin = 1;
+    this.pixMax = Math.min(devicePixelRatio, 2);
+    this.pixRatio = this.touch
+      ? Math.min(devicePixelRatio, 1.25)   // a little over native, then it adapts
+      : this.pixMax;
+    this.renderer.setPixelRatio(this.pixRatio);
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -225,18 +233,30 @@ class Game {
 
   // -------------------------------------------------------------- events ---
   #bind() {
+    /**
+     * Size the buffer from the element the canvas actually occupies, not from
+     * `innerWidth`/`innerHeight`. On mobile Safari those two disagree while
+     * the address bar is sliding, and a buffer sized to one while the CSS box
+     * is the other gets stretched by the browser — which looks like a broken
+     * render rather than a resize.
+     */
+    const host = $('app');
     const fit = () => {
-      this.camera.aspect = innerWidth / innerHeight;
+      const w = host.clientWidth || innerWidth;
+      const h = host.clientHeight || innerHeight;
+      if (w < 2 || h < 2) return;
+      this.camera.aspect = w / h;
       this.camera.updateProjectionMatrix();
-      this.renderer.setSize(innerWidth, innerHeight);
-      this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.maxRatio) * this.resScale);
+      this.renderer.setPixelRatio(this.pixRatio);
+      this.renderer.setSize(w, h, true);
     };
     addEventListener('resize', fit);
-    // Mobile Safari grows and shrinks the viewport as the address bar slides,
-    // and it reports that through visualViewport rather than a plain resize.
     visualViewport?.addEventListener('resize', fit);
     addEventListener('orientationchange', () => setTimeout(fit, 280));
+    // The authority: whatever the browser decides the box is, the buffer follows.
+    new ResizeObserver(fit).observe(host);
     this.fit = fit;
+    fit();
 
     const keys = {
       KeyW: 'forward', ArrowUp: 'forward', KeyS: 'back', ArrowDown: 'back',
@@ -1130,23 +1150,26 @@ class Game {
   /**
    * Adaptive resolution. Phone GPUs vary by more than an order of magnitude,
    * so rather than guess at one setting, measure the frame time and move the
-   * buffer scale until it fits. Dropping pixels costs sharpness; dropping
-   * frames costs the game, so pixels go first.
+   * buffer between native and twice native until it fits.
    *
-   * It only ever steps once a second, and the band is wide, so it settles
-   * instead of oscillating between two scales.
+   * The floor of 1 is the important part. An earlier version let this fall to
+   * 0.52, which meant the browser was stretching an undersized image across
+   * the screen — on a phone that is not a soft picture, it is visible blocks.
+   * A phone that cannot hold native resolution gets a lower frame rate
+   * instead; it never gets a broken-looking one.
+   *
+   * It steps at most once a second and the dead band is wide, so it settles
+   * rather than oscillating.
    */
   #adapt(raw) {
     this.fps = this.fps === undefined ? 60 : this.fps + (1 / Math.max(raw, 0.001) - this.fps) * 0.05;
     this.adaptAt = (this.adaptAt ?? 0) + raw;
     if (this.adaptAt < 1.1 || this.state !== 'playing') return;
     this.adaptAt = 0;
-    const was = this.resScale;
-    if (this.fps < 38) this.resScale = Math.max(0.52, this.resScale - 0.1);
-    else if (this.fps > 56) this.resScale = Math.min(1, this.resScale + 0.06);
-    if (Math.abs(this.resScale - was) > 0.001) {
-      this.renderer.setPixelRatio(Math.min(devicePixelRatio, this.maxRatio) * this.resScale);
-    }
+    const was = this.pixRatio;
+    if (this.fps < 38) this.pixRatio = Math.max(this.pixMin, this.pixRatio - 0.15);
+    else if (this.fps > 56) this.pixRatio = Math.min(this.pixMax, this.pixRatio + 0.1);
+    if (Math.abs(this.pixRatio - was) > 0.001) this.fit();
   }
 
   #update(dt, t) {
@@ -1182,7 +1205,11 @@ class Game {
     for (const r of this.rafts) r.update(dt, waterY, terrain, baseY, t);
     this.waterY = waterY;
 
-    p.update(dt, this.input, world, this.yaw, t, { rafts: this.rafts });
+    // On touch the movement basis is the frame the thumbstick captured, not the
+    // live camera yaw. If it were the live yaw, the camera chasing her heading
+    // would rotate the very frame that produced it, and holding one direction
+    // would spiral instead of walking a straight line.
+    p.update(dt, this.input, world, this.input.frameYaw ?? this.yaw, t, { rafts: this.rafts });
 
     // stone plugs are solid until a crew shifts them
     for (const plug of this.plugs) {
@@ -1523,17 +1550,45 @@ class Game {
   }
 
   // -------------------------------------------------------------- camera ---
+  /**
+   * On a phone there is no free look: the camera simply stays behind her and
+   * swings round to whichever way she is walking. `shortest` keeps it taking
+   * the near way round rather than unwinding the long way through 2π.
+   *
+   * The ant's heading is `facing`, and the camera's horizontal forward is
+   * `-(sin yaw, cos yaw)`, so the yaw that puts the camera at her back is
+   * `facing + π`.
+   */
+  #followCamera(dt) {
+    const p = this.player;
+    if (!p) return;
+    const moving = Math.hypot(p.vel.x, p.vel.z) > 1.2;
+    if (moving) this.camGoal = p.facing + Math.PI;
+    if (this.camGoal === undefined) this.camGoal = this.yaw;
+
+    const shortest = (a) => Math.atan2(Math.sin(a), Math.cos(a));
+    const err = shortest(this.camGoal - this.yaw);
+    // Fast enough to keep up with a dash, slow enough not to whip around when
+    // she sidesteps. Snapping instantly makes the whole screen lurch.
+    this.yaw += err * Math.min(1, dt * (this.snapCam ? 30 : 5.5));
+    this.pitch += (0.30 - this.pitch) * Math.min(1, dt * 4);
+  }
+
   #camera(dt, terrain, baseY) {
     const p = this.player;
     this.tacticalBlend += ((this.tactical ? 1 : 0) - this.tacticalBlend) * Math.min(1, dt * 5);
     if (this.tacticalBlend > 0.02) return this.#tacticalCamera(dt, terrain, baseY);
+    if (this.touch) this.#followCamera(dt);
     const dir = new THREE.Vector3(
       Math.sin(this.yaw) * Math.cos(this.pitch),
       Math.sin(this.pitch),
       Math.cos(this.yaw) * Math.cos(this.pitch)
     );
     const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-    const target = new THREE.Vector3(p.pos.x, p.pos.y + 2.3, p.pos.z).addScaledVector(right, 1.0);
+    // Over-the-shoulder on a mouse, dead centre on a phone: with no free look,
+    // an offset camera means the thing in your crosshair is not in front of her.
+    const shoulder = this.touch ? 0 : 1.0;
+    const target = new THREE.Vector3(p.pos.x, p.pos.y + 2.3, p.pos.z).addScaledVector(right, shoulder);
 
     // pull in when soil is behind us, so the camera never buries itself
     let dist = this.camDist;
