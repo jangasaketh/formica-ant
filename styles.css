@@ -669,17 +669,20 @@ body.touch #app canvas { touch-action: none; }
 #touch.gone { display: none; }
 
 /* Only while she is actually down there. On the title screen a fire button
-   would be both meaningless and in the way of the real buttons. */
-#tlook, #tmove, #tstick, #tpad, #tside { display: none; }
-body.playing #tlook,
-body.playing #tmove,
-body.playing #tstick { display: block; }
-body.playing #tpad,
-body.playing #tside { display: grid; }
+   would be both meaningless and in the way of the real buttons.
+ *
+ * Written as `body:not(.playing) #x` rather than a bare `#x { display: none }`
+ * on purpose: the bare form has the same specificity as the `#tpad` rule that
+ * sets `display: grid` further down this file, so source order decided it and
+ * the pads showed over the menus. The compound selector wins outright. */
+body:not(.playing) #tlook,
+body:not(.playing) #tmove,
+body:not(.playing) #tstick,
+body:not(.playing) #tpad,
+body:not(.playing) #tside { display: none !important; }
 
 /* The pause button stays reachable while paused, which is the whole point. */
-#ttop { display: none; }
-body.inplay #ttop { display: flex; }
+body:not(.inplay) #ttop { display: none !important; }
 
 /* These sit under the buttons and catch everything the buttons do not. The
    split is down the middle: left thumb steers, right thumb aims. */
@@ -867,6 +870,10 @@ body.touch.bigmap #hud { z-index: 40; }
   pointer-events: auto; z-index: 3;
 }
 #rotate-hint.gone { display: none; }
+/* Only once she is down there. On the menus it sat dead centre over the
+   "tap to begin" target, so the first tap dismissed the hint instead of
+   starting the game. */
+body:not(.inplay) #rotate-hint { display: none; }
 #rotate-hint b { display: block; font-family: var(--serif); font-size: 20px; margin-bottom: 7px; }
 #rotate-hint span { font-size: 13.5px; color: #a4927a; line-height: 1.45; }
 
@@ -913,3 +920,50 @@ body.touch .ctrl-list kbd.t { font-size: 17px; }
 @media (max-height: 400px) {
   body.touch #tside { grid-template-columns: repeat(3, auto); }
 }
+
+/* the recentre button carries a glyph, not a word */
+#tb-centre { font-size: 22px; line-height: 1; }
+
+/* ------------------------------------------------------- the opening gate - */
+.gate { text-align: center; cursor: pointer; }
+.gate .title { font-size: clamp(56px, 13vw, 128px); margin: 4px 0 0; }
+.gate-sub {
+  margin: 2px 0 0; font-family: var(--serif); font-size: clamp(15px, 3vw, 21px);
+  letter-spacing: .34em; text-transform: uppercase; color: var(--spore); opacity: .75;
+}
+.gate-tap { margin: 42px 0 0; }
+.gate-tap span {
+  display: inline-block; padding: 11px 30px; font-size: 16px;
+  letter-spacing: .2em; text-transform: uppercase; color: var(--bone);
+  border: 1px solid rgba(237,227,210,.42);
+  animation: gatepulse 2.1s ease-in-out infinite;
+}
+@keyframes gatepulse {
+  0%, 100% { opacity: .55; box-shadow: 0 0 0 rgba(242,163,60,0); }
+  50% { opacity: 1; box-shadow: 0 0 26px rgba(242,163,60,.3); }
+}
+#screen-gate { cursor: pointer; }
+
+/* ---------------------------------------------------------- music picker - */
+.musicpick {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin: 16px 0 0;
+}
+.mp-label {
+  font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+  color: #8c7c66; margin-right: 3px;
+}
+.mp {
+  -webkit-appearance: none; appearance: none; cursor: pointer;
+  font-family: var(--sans); font-size: 13.5px; letter-spacing: .04em;
+  color: #c3b29a; background: transparent;
+  border: 1px solid rgba(237,227,210,.26); padding: 6px 13px;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.mp:hover { color: var(--bone); border-color: rgba(237,227,210,.5); }
+.mp.on {
+  color: var(--loam); background: var(--amber); border-color: var(--amber);
+  font-weight: 600;
+}
+.card .musicpick { justify-content: center; margin: 14px 0 2px; }
+body.touch .mp { padding: 10px 16px; font-size: 15px; }   /* thumb-sized */

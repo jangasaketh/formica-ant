@@ -165,6 +165,7 @@
     <button id="tb-call" class="tbtn small locked">Call</button>
     <button id="tb-trail" class="tbtn small">Trail</button>
     <button id="tb-tac" class="tbtn small">Crew</button>
+    <button id="tb-centre" class="tbtn small" title="Put the camera back behind her">&#8635;</button>
   </div>
 
   <div id="ttop">
@@ -202,6 +203,18 @@
   </div>
 </section>
 
+<!-- One tap between loading and the menu. It exists because no browser will
+     start audio without a gesture, and the title cue is meant to be the first
+     thing you hear rather than something that sneaks in later. -->
+<section id="screen-gate" class="screen centre gone">
+  <div class="gate">
+    <p class="genus">Solenopsis invicta</p>
+    <h1 class="title">Formica</h1>
+    <p class="gate-sub">the deep burrow</p>
+    <p class="gate-tap"><span>Tap to begin</span></p>
+  </div>
+</section>
+
 <section id="screen-title" class="screen left gone">
   <div class="plate">
     <p class="genus">Solenopsis invicta &middot; worker, 4&nbsp;mm</p>
@@ -222,6 +235,14 @@
       <button id="btn-full" class="cta ghost touch-only">Full screen</button>
     </div>
     <p class="note">First time? Start with <b>How to play</b> — two short pages.</p>
+
+    <div class="musicpick">
+      <span class="mp-label">Music</span>
+      <button class="mp" data-music="epic">Cinematic</button>
+      <button class="mp" data-music="burrow">Burrow</button>
+      <button class="mp" data-music="off">Off</button>
+    </div>
+
     <p class="build" id="build-tag"></p>
   </div>
 </section>
@@ -362,6 +383,12 @@
   <div class="card">
     <h2>Paused</h2>
     <p>The burrow is still down there, working out where you went.</p>
+    <div class="musicpick">
+      <span class="mp-label">Music</span>
+      <button class="mp" data-music="epic">Cinematic</button>
+      <button class="mp" data-music="burrow">Burrow</button>
+      <button class="mp" data-music="off">Off</button>
+    </div>
     <p class="build" id="build-tag-2"></p>
     <button id="btn-resume" class="cta">Back in</button>
   </div>

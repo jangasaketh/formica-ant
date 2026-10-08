@@ -8,7 +8,7 @@
 
 // Bumped whenever the build changes, and shown on the title screen and the
 // pause card, so which version is live is never a guess.
-export const BUILD = 'v3.4 · follow camera';
+export const BUILD = 'v3.5 · score and camera';
 
 export const SPAN = 300;          // world units across one burrow level
 export const FIELD = 220;         // heightfield resolution (FIELD x FIELD)
@@ -27,7 +27,11 @@ export const PLAYER = {
   friction: 15,
   jumpSpeed: 12.5,
   gravity: 30,
-  radius: 1.0,
+  radius: 1.3,
+  // How far ahead of her centre the drawn body reaches. Collision is a circle
+  // round her middle, but she is far longer than she is wide, so this is what
+  // keeps her head out of the soil without making her too fat for a tunnel.
+  noseReach: 2.3,
   height: 2.2,
   stepUp: 1.9,           // how tall a lip the ant climbs without jumping
   maxHealth: 190,
@@ -237,6 +241,28 @@ export const BOSSES = {
     body: 0x14101c, head: 0x33203c, gaster: 0x090710, legs: 0x0c0912,
     aura: 0xd34bff, grants: null,
   },
+};
+
+/*
+ * The phone camera. It sits at her back and follows her round, and the whole
+ * point of these numbers is that it does so calmly: the first version chased
+ * her heading proportionally, and stepping sideways spun the world.
+ *
+ * `maxTurn` is the one that matters. It is a hard ceiling on how fast the view
+ * can rotate, in radians a second, whatever she does — about a third of a turn
+ * a second, which reads as a deliberate pan rather than a snap.
+ */
+export const CAM = {
+  ease: 3.0,          // how eagerly it chases her heading
+  maxTurn: 1.4,       // rad/s ceiling on the swing (80 deg/s). Lower = calmer
+  deadZone: 0.12,     // heading changes smaller than this are ignored
+  headingEase: 6.0,   // smoothing on her heading before the camera sees it
+  pitch: 0.30,        // resting tilt
+  recentre: 2.2,      // how fast a hand-made look eases back behind her
+  lookHold: 1.1,      // seconds it stays where you put it after you let go
+  lookSpeedX: 0.0040, // radians per pixel dragged
+  lookSpeedY: 0.0030,
+  lookLimit: 2.6,     // how far round you may swing it by hand
 };
 
 // What beating each champion unlocks. `key` is the keyboard prompt, `touch`

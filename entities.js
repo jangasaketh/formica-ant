@@ -53,11 +53,77 @@ function emissives(mesh) {
   return out;
 }
 
-/** Follow the terrain, sliding around soil walls rather than sticking. */
-function moveOnTerrain(pos, vel, dt, terrain, radius, need) {
-  pos.x += vel.x * dt;
-  pos.z += vel.z * dt;
-  terrain.resolve(pos, radius, need);
+/**
+ * Follow the terrain, sliding around soil walls rather than sticking.
+ *
+ * The movement is cut into substeps, which is what stops her going through
+ * walls. A dash is 44 units a second, and on a phone struggling for frames a
+ * single step can be the full 0.05s cap — 2.2 units in one jump, which is
+ * wider than some of the soil between chambers. Integrate that in one go and
+ * she simply appears on the other side, with `resolve` seeing open air at the
+ * destination and nothing to push back against.
+ *
+ * The second guard is the revert. Deep inside soil the headroom field flattens
+ * out, so its gradient stops pointing anywhere useful and `resolve` cannot dig
+ * her out. If a substep ends with her still buried, that substep is given back
+ * rather than carried on with.
+ */
+const GRAD = { x: 0, z: 0 };
+
+/**
+ * Keep the *drawn* body out of the soil, not just the centre point.
+ *
+ * Collision is a circle of `radius` around her middle, but she is drawn far
+ * longer than she is wide — nose to gaster is about 5.6 units against a
+ * collision radius of 1. Walk her face-first into a wall and she stops with
+ * her centre legally 1 unit clear while her head is nearly 2 units inside the
+ * soil, which is exactly what passing through a wall looks like.
+ *
+ * Widening the circle is not the answer: at the radius her nose needs, she
+ * would no longer fit down a tunnel. So the guard is directional. It probes
+ * `lead` units along the way she is actually travelling and, if that is soil,
+ * removes only the part of her velocity heading into it. The part along the
+ * wall survives, so she slides rather than stopping dead.
+ */
+function noseGuard(pos, vel, terrain, lead, need) {
+  const sp = Math.hypot(vel.x, vel.z);
+  if (sp < 0.001) return;
+  const nx = vel.x / sp, nz = vel.z / sp;
+  const ax = pos.x + nx * lead, az = pos.z + nz * lead;
+  if (terrain.headAt(ax, az) >= need) return;
+
+  terrain.gradient(ax, az, GRAD);              // points towards more headroom
+  const gl = Math.hypot(GRAD.x, GRAD.z);
+  if (gl < 1e-5) return;
+  const ux = GRAD.x / gl, uz = GRAD.z / gl;    // away from the wall
+  const into = vel.x * ux + vel.z * uz;
+  if (into < 0) { vel.x -= ux * into; vel.z -= uz * into; }
+}
+
+function moveOnTerrain(pos, vel, dt, terrain, radius, need, lead = 0) {
+  if (lead > 0) noseGuard(pos, vel, terrain, lead, need);
+  const dx = vel.x * dt, dz = vel.z * dt;
+  const dist = Math.hypot(dx, dz);
+  if (dist < 1e-6) { terrain.resolve(pos, radius, need); return; }
+
+  // never advance more than about half a body in one go
+  const limit = Math.max(0.3, radius * 0.6);
+  const steps = Math.min(10, Math.max(1, Math.ceil(dist / limit)));
+
+  for (let i = 0; i < steps; i++) {
+    const lastX = pos.x, lastZ = pos.z;
+    pos.x += dx / steps;
+    pos.z += dz / steps;
+    terrain.resolve(pos, radius, need);
+    if (terrain.headAt(pos.x, pos.z) < need) {
+      // still in the soil after resolving: hand the step back and stop
+      pos.x = lastX;
+      pos.z = lastZ;
+      vel.x *= 0.25;
+      vel.z *= 0.25;
+      return;
+    }
+  }
 }
 
 // --------------------------------------------------------------- Player ----
@@ -243,7 +309,7 @@ export class Player {
 
     // ---- integrate --------------------------------------------------------
     const need = MIN_HEADROOM * 0.72;
-    moveOnTerrain(this.pos, this.vel, dt, terrain, PLAYER.radius, need);
+    moveOnTerrain(this.pos, this.vel, dt, terrain, PLAYER.radius, need, PLAYER.noseReach);
     this.pos.y += this.vel.y * dt;
 
     // very little steering once you are in the shaft — it is a fall, not a flight
@@ -465,7 +531,8 @@ export class Enemy {
     const s = Math.hypot(this.vel.x, this.vel.z);
     if (s > speed) { this.vel.x *= speed / s; this.vel.z *= speed / s; }
 
-    moveOnTerrain(this.pos, this.vel, dt, terrain, cfg.bodyRadius * 0.6, MIN_HEADROOM * 0.7);
+    moveOnTerrain(this.pos, this.vel, dt, terrain, cfg.bodyRadius * 0.6, MIN_HEADROOM * 0.7,
+      cfg.bodyRadius * 1.4);
     this.pos.y = baseY + terrain.floorAt(this.pos.x, this.pos.z);
     this.mesh.position.copy(this.pos);
 
@@ -1110,7 +1177,8 @@ export class Boss {
         const sp = cfg.speed * (this.enraged ? 3.4 : 2.9);
         this.vel.x = this.chargeDir.x * sp;
         this.vel.z = this.chargeDir.z * sp;
-        moveOnTerrain(this.pos, this.vel, dt, terrain, this.cfg.bodyRadius * 0.55, MIN_HEADROOM * 0.7);
+        moveOnTerrain(this.pos, this.vel, dt, terrain, this.cfg.bodyRadius * 0.55, MIN_HEADROOM * 0.7,
+          this.cfg.bodyRadius * 1.5);
         if (same && dist < this.cfg.contact + 1.4 && player.damage(cfg.damage * 1.35)) {
           ctx.onHit?.(this);
           this.timer = Math.min(this.timer, 0.12);
@@ -1181,7 +1249,8 @@ export class Boss {
     this.vel.z += (dz / len) * sp * dt * 10;
     const s = Math.hypot(this.vel.x, this.vel.z);
     if (s > sp) { this.vel.x *= sp / s; this.vel.z *= sp / s; }
-    moveOnTerrain(this.pos, this.vel, dt, terrain, this.cfg.bodyRadius * 0.55, MIN_HEADROOM * 0.7);
+    moveOnTerrain(this.pos, this.vel, dt, terrain, this.cfg.bodyRadius * 0.55, MIN_HEADROOM * 0.7,
+      this.cfg.bodyRadius * 1.5);
     if (s > 0.2) this.#face(new THREE.Vector3(dx, 0, dz), dt, 5);
   }
 

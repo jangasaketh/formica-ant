@@ -161,12 +161,16 @@ export class World {
       return g;
     };
 
+    // Roughness 0.99 is a perfectly matte surface, which returns the same
+    // brightness from every angle — the main reason damp soil was reading as
+    // flat paper. Backing it off gives the floor a faint sheen that moves as
+    // you do, and that movement is what the eye reads as a solid surface.
     const floorMat = new THREE.MeshStandardMaterial({
-      vertexColors: true, map: tex, roughness: 0.99, metalness: 0.0,
+      vertexColors: true, map: tex, roughness: 0.86, metalness: 0.0,
       side: THREE.DoubleSide,
     });
     const ceilMat = new THREE.MeshStandardMaterial({
-      vertexColors: true, map: tex, roughness: 1.0, metalness: 0.0,
+      vertexColors: true, map: tex, roughness: 0.94, metalness: 0.0,
       side: THREE.DoubleSide,
     });
 
@@ -346,8 +350,18 @@ export class World {
     this.lantern = new THREE.PointLight(0xffc98a, 90, 34, 1.5);
     this.scene.add(this.lantern);
     // a cool counter-light so the far side of her is not pure black
-    this.rim = new THREE.DirectionalLight(0x8fb4d8, 0.42);
+    this.rim = new THREE.DirectionalLight(0x8fb4d8, 0.50);
     this.scene.add(this.rim);
+
+    // A key light from a fixed high angle. Ambient and a lantern at the
+    // camera light everything evenly, which is why the burrow reads flat —
+    // with nothing casting a consistent light side and dark side, a curved
+    // surface and a flat one look the same. This is what gives the soil
+    // shape. It is added once, at setup: the light count must never change
+    // at runtime or every material in the scene recompiles.
+    this.key = new THREE.DirectionalLight(0xffd2a0, 0.62);
+    this.key.position.set(0.55, 1, 0.38);
+    this.scene.add(this.key);
   }
 
   setActiveLevel(i) {

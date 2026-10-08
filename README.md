@@ -1,8 +1,8 @@
 # Formica — the deep burrow
 
-**Build v3.4** — the phone camera follows her, and the render is fixed. The
-title screen and the pause card show the build string, so you can tell at a
-glance which version is live.
+**Build v3.5** — a new score, a calmer camera, and the ant stays out of the
+walls. The title screen and the pause card show the build string, so you can
+tell at a glance which version is live.
 
 What changed from v2, all from playtest feedback:
 
@@ -121,6 +121,74 @@ that no two buttons overlap, that every button clears 44px, that nothing falls
 off the edge of a notched screen, and that steering and firing work at the same
 time.
 
+### v3.5 — the score, the camera, and the walls
+
+**The camera was whipping, and now it is governed.** Stepping sideways turns
+her ninety degrees in a single frame, and the old camera chased that
+proportionally — about 500 degrees a second, which is the whole world spinning.
+Three things fix it: a hard ceiling of 80 degrees a second on how fast the view
+may rotate whatever she does, a dead zone so the wobble of walking round a rock
+is ignored entirely, and smoothing on her heading before the camera ever sees
+it. Measured on a 90-degree change of direction: peak 20 degrees a second.
+
+**You can look around again, without losing the follow.** Drag the right of the
+screen and the camera swings off her back — but it is an *offset*, not a free
+camera, so a second after you let go it eases home behind her. The new **↻**
+button snaps it back at once. So the camera is still "always behind her", and
+you can still look where you like.
+
+Doing both at once needed care. A camera that chases your heading, with a stick
+measured against that same camera, spirals. The stick therefore captures the
+camera direction when your thumb settles on a heading and freezes it,
+re-capturing only when your thumb really points somewhere else.
+
+**The ant no longer walks through walls, and this one was measurable.** Her
+drawn body reaches 2.28 units to her nose and 2.81 across with her wings out,
+but collision was a circle of radius 1 around her middle — so she stopped with
+her centre legally clear and her head nearly two units inside the soil. On
+14.5% of frames some part of her was in the rock. Widening the circle enough to
+cover her would have stopped her fitting down a tunnel, so the guard is
+directional: it probes ahead along the way she is actually travelling and
+removes only the part of her motion heading into soil, leaving the part along
+the wall so she slides. With a slightly wider circle as well, **14.5% to 1.3%**,
+and she still squeezes through the tight places.
+
+**A clearer, more solid picture.**
+
+- **Antialiasing is on for phones now.** Mobile GPUs are tile-based and resolve
+  it inside the tile, so it is far cheaper there than desktop intuition
+  suggests, and jagged edges on a small dense screen are the most obvious thing
+  wrong with a picture.
+- **A key light.** Ambient plus a lantern at the camera lights everything
+  evenly, which is exactly why the burrow read flat — nothing cast a consistent
+  light side and dark side, so a curved surface and a flat one looked the same.
+- **The soil is no longer perfectly matte**, so it catches a faint sheen that
+  moves as you do, which is what the eye reads as a solid surface.
+- **The depth range is sane.** 0.1 to 500 is a ratio of 5000, which a desktop
+  absorbs and a phone often does not — surfaces win and lose the depth test at
+  random, which is a wall flickering and things showing through it. Now 0.45 to
+  200, and the fog is total by 150 anyway.
+- **The chase camera can come closer** (1.8 rather than 2.6) and samples finely
+  enough not to step over a thin pinch between chambers.
+
+**A grand opening, and two scores to choose from.**
+
+The game now opens on a title card with **Tap to begin**. That tap is not
+decoration: no browser will start audio without a gesture, and the title cue is
+meant to be the first thing you hear rather than something that sneaks in once
+you are already playing.
+
+The cue runs about forty seconds and is written in five sections — a lone horn
+over a drone, a staccato string ostinato starting underneath, the theme
+arriving on horns, everything at once, then one impact and a long tail. It is
+synthesised from oscillators at runtime like everything else here: nothing is
+sampled, and no existing piece is quoted.
+
+**Music: Cinematic / Burrow / Off** on the title screen and in the pause card.
+*Cinematic* is the new orchestral score — a string ostinato under horns and
+choir, thickening as a floor turns dangerous. *Burrow* is the original koto and
+taiko. Your choice is remembered.
+
 ### v3.4 — the camera follows her, and the pixels are fixed
 
 **The blocky render is gone, and it was measurable.** The adaptive scaler was
@@ -197,8 +265,9 @@ Or push all the files to a GitHub repo root and turn on Pages
 | Thumb | Action |
 | ----- | ------ |
 | Left half | Press anywhere for a stick. Gently to creep, to the rim to sprint |
-| The camera | Follows her by itself — no looking around. She fires where she faces |
-| Right half | Two fingers to pinch the camera in and out |
+| Right half | Drag to look around — it eases back behind her when you let go |
+| The camera | Otherwise rides at her back by itself. She fires where she faces |
+| ↻ | Snap the camera straight back behind her |
 | Acid / Bite | Hold to spray. Bite switches jaws |
 | Fly | Wing dash |
 | Burst · Use · Call · Trail | Hold Burst and Trail; tap Use and Call |
@@ -397,8 +466,15 @@ Nearly everything lives in `config.js`.
 - **Touch feel:** `STICK_R` in `touch.js` is how far the thumb travels for
   full push, `SPRINT_AT` the fraction of that which counts as running, and
   `REAIM` how far the thumb must swing before the movement frame re-captures.
-- **Phone camera:** `#followCamera()` in `game.js` — the `5.5` is how fast it
-  swings round behind her, and `0.30` is the pitch it settles at.
+- **Phone camera:** everything is in `CAM` in `config.js`. `maxTurn` is the
+  ceiling on how fast the view may rotate and is the one to lower if it still
+  feels quick; `deadZone` is how much heading change it ignores; `recentre` and
+  `lookHold` are how soon a hand-made look eases home.
+- **Her body in the walls:** `PLAYER.noseReach` is how far ahead of her centre
+  the guard looks, `PLAYER.radius` the collision circle. Raising the radius
+  past about 1.6 starts to stop her fitting down a tunnel.
+- **Music:** `playIntro()` in `audio.js` is the title cue, written out in bars;
+  `#epicStep()` is the cinematic in-game score and `#playStep()` the original.
 - **Phone performance:** `pixMin`, `pixMax` and `pixRatio` in the `Game`
   constructor; `#adapt()` moves `pixRatio` between the two. **Never let
   `pixMin` go below 1** — that is rendering smaller than the screen and it

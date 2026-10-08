@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import {
-  LEVELS, PLAYER, WEAPONS, ALARM, RECRUIT, BOSSES, POWERS, WING, ACID, ENGAGE, BUILD,
+  LEVELS, PLAYER, WEAPONS, ALARM, RECRUIT, BOSSES, POWERS, WING, ACID, ENGAGE, BUILD, CAM,
   SPAN, FIELD, LEVEL_DROP, SHAFT_RADIUS, MIN_HEADROOM, CRAWL_HEADROOM,
 } from './config.js';
 import { World, mulberry32 } from './world.js';
@@ -87,6 +87,13 @@ const FLOOR_HOOK = [
   'She is here. Everything in this vault is between you and her.',
 ];
 
+/*
+ * How close the chase camera may come to her before it gives up making room.
+ * It used to stop at 2.6, which is wider than some tunnels — so in a squeeze
+ * the camera stayed in the soil and you saw through the wall.
+ */
+const CAM_MIN = 1.8;
+
 const ROOM_LABEL = {
   brood: 'Brood chamber', larder: 'The larder', fungus: 'Fungus garden',
   granary: 'Granary', midden: 'Refuse heap', gallery: 'Gallery',
@@ -97,8 +104,12 @@ class Game {
     // A phone has a very high pixel ratio and a fraction of the fill rate, so
     // it is the one that cannot afford either multisampling or a 3x buffer.
     this.touch = isTouch();
+    // Antialiasing is on everywhere now, phones included. Mobile GPUs are
+    // tile-based and resolve MSAA inside the tile, so it is far cheaper there
+    // than the desktop intuition suggests — and jagged edges on a small dense
+    // screen are the single most obvious thing wrong with the picture.
     this.renderer = new THREE.WebGLRenderer({
-      antialias: !this.touch,
+      antialias: true,
       powerPreference: 'high-performance',
     });
 
@@ -109,7 +120,7 @@ class Game {
     this.pixMin = 1;
     this.pixMax = Math.min(devicePixelRatio, 2);
     this.pixRatio = this.touch
-      ? Math.min(devicePixelRatio, 1.25)   // a little over native, then it adapts
+      ? Math.min(devicePixelRatio, 1.5)    // sharp to start, then it adapts
       : this.pixMax;
     this.renderer.setPixelRatio(this.pixRatio);
     this.renderer.setSize(innerWidth, innerHeight);
@@ -119,7 +130,19 @@ class Game {
     $('app').appendChild(this.renderer.domElement);
 
     this.scene = new THREE.Scene();
-    this.camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.1, 500);
+    /*
+     * The near and far planes decide how much depth precision there is, and
+     * the ratio between them is what matters. 0.1 to 500 is a ratio of 5000,
+     * which a desktop's 24-bit depth buffer absorbs but a phone's often does
+     * not: surfaces start winning and losing the depth test at random from
+     * frame to frame, which is a wall flickering away and the ant showing
+     * through it.
+     *
+     * The camera never gets closer than ~1.8 units to anything it is meant to
+     * draw, and the fog is total by 150, so 0.45 to 200 costs nothing visible
+     * and improves depth precision by more than ten times.
+     */
+    this.camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.45, 200);
 
     this.clock = new THREE.Clock();
     this.state = 'loading';
@@ -208,7 +231,11 @@ class Game {
           this.world.setActiveLevel(0);
           this.player.spawnAt(lv.spawn.x, lv.y + lv.terrain.floorAt(lv.spawn.x, lv.spawn.z), lv.spawn.z, 0);
           $('screen-load').classList.add('gone');
-          $('screen-title').classList.remove('gone');
+          // Not straight to the title: no browser will start audio without a
+          // gesture first, and the title cue is meant to be the first thing
+          // you hear. So one tap stands between loading and the menu, and
+          // that tap is what lets the music play.
+          $('screen-gate').classList.remove('gone');
           this.state = 'menu';
         }, 260);
         return;
@@ -285,6 +312,7 @@ class Game {
       if (e.code === 'Digit2') this.#switch('bite');
       if (e.code === 'KeyM') {
         this.audio.setMuted(!this.audio.muted);
+        this.#paintMusic();
         this.toast(this.audio.muted ? 'Sound off' : 'Sound on');
       }
       if (e.code === 'Escape' && this.state === 'playing') this.pause();
@@ -343,9 +371,17 @@ class Game {
       if (!this.touch) this.#grabPointer(1300);
     });
 
+    // the gate: the gesture that lets the audio context exist at all
+    $('screen-gate').onclick = () => this.openTitle();
+
     $('btn-start').onclick = () => this.start();
     $('btn-story').onclick = () => this.playStory();
     $('btn-skip').onclick = () => this.endStory();
+
+    // music picker, on the title screen and in the pause card
+    for (const el of document.querySelectorAll('[data-music]')) {
+      el.onclick = () => this.pickMusic(el.dataset.music);
+    }
 
     // the two-page briefing
     $('btn-brief').onclick = () => this.openBrief();
@@ -492,6 +528,40 @@ class Game {
     this.#paintWeapon();
   }
 
+  // --------------------------------------------------------- title & music --
+  /** The one tap that starts the audio, then the title cue over the burrow. */
+  openTitle() {
+    $('screen-gate').classList.add('gone');
+    $('screen-title').classList.remove('gone');
+    this.state = 'menu';
+    this.audio.start();
+    this.audio.ctx?.resume?.();
+    this.#paintMusic();
+    if (!this.audio.muted) this.audio.playIntro();
+  }
+
+  /** Swap the score. Playing the intro again is the quickest way to hear it. */
+  pickMusic(name) {
+    if (name === 'off') {
+      this.audio.start();
+      this.audio.setMuted(true);
+      this.audio.stopIntro(0.4);
+    } else {
+      this.audio.start();
+      if (this.audio.muted) this.audio.setMuted(false);
+      this.audio.setStyle(name);
+      if (this.state === 'menu') { this.audio.stopIntro(0.25); setTimeout(() => this.audio.playIntro(), 320); }
+    }
+    this.#paintMusic();
+  }
+
+  #paintMusic() {
+    const now = this.audio.muted ? 'off' : this.audio.style;
+    for (const el of document.querySelectorAll('[data-music]')) {
+      el.classList.toggle('on', el.dataset.music === now);
+    }
+  }
+
   // ----------------------------------------------------------- briefing ---
   openBrief() {
     this.audio.start();
@@ -508,6 +578,7 @@ class Game {
   // -------------------------------------------------------------- story ---
   playStory() {
     this.audio.start();
+    this.audio.stopIntro(1.0);
     this.audio.setIntensity(0.22);
     $('screen-title').classList.add('gone');
     $('screen-story').classList.remove('gone');
@@ -569,6 +640,7 @@ class Game {
   // ---------------------------------------------------------- level flow ---
   start() {
     this.audio.start();
+    this.audio.stopIntro(0.8);
     $('screen-title').classList.add('gone');
     this.stats = { food: 0, kills: 0, crits: 0, brood: 0, bosses: 0, time: 0 };
     this.player.health = PLAYER.maxHealth;
@@ -1559,19 +1631,103 @@ class Game {
    * `-(sin yaw, cos yaw)`, so the yaw that puts the camera at her back is
    * `facing + π`.
    */
+  /**
+   * The phone camera. It rides at her back and comes round to follow her, but
+   * gently — and you can always drag it off that line to look around.
+   *
+   * Three things keep it calm, because the first version whipped:
+   *
+   * 1. **A speed limit.** Stepping sideways turns her 90 degrees in one frame.
+   *    Chasing that proportionally meant the whole world spun. The swing is
+   *    now capped at CAM.maxTurn radians a second, so the worst case is a
+   *    steady pan you can follow with your eyes rather than a snap.
+   * 2. **A dead zone.** Small heading changes — the wobble of walking round a
+   *    rock — are ignored entirely, so the camera holds still unless she has
+   *    really committed to a new direction.
+   * 3. **It follows where she is going, not where she points.** The goal is a
+   *    smoothed heading, so a momentary flick does not move the camera at all.
+   */
   #followCamera(dt) {
     const p = this.player;
     if (!p) return;
-    const moving = Math.hypot(p.vel.x, p.vel.z) > 1.2;
-    if (moving) this.camGoal = p.facing + Math.PI;
-    if (this.camGoal === undefined) this.camGoal = this.yaw;
-
     const shortest = (a) => Math.atan2(Math.sin(a), Math.cos(a));
-    const err = shortest(this.camGoal - this.yaw);
-    // Fast enough to keep up with a dash, slow enough not to whip around when
-    // she sidesteps. Snapping instantly makes the whole screen lurch.
-    this.yaw += err * Math.min(1, dt * (this.snapCam ? 30 : 5.5));
-    this.pitch += (0.30 - this.pitch) * Math.min(1, dt * 4);
+
+    // a smoothed version of her heading, so one frame of sidestep is not a turn
+    const moving = Math.hypot(p.vel.x, p.vel.z) > 1.6;
+    if (moving) {
+      if (this.camHeading === undefined) this.camHeading = p.facing;
+      this.camHeading += shortest(p.facing - this.camHeading) * Math.min(1, dt * CAM.headingEase);
+      this.camGoal = this.camHeading + Math.PI;
+    }
+    if (this.camGoal === undefined) { this.camGoal = this.yaw; this.camHeading = p.facing; }
+
+    // The view is two angles added together: `followYaw`, which the game
+    // drives, and `lookYaw`, which your thumb drives. Keeping them apart is
+    // what lets the manual part decay on its own without the automatic part
+    // silently absorbing the difference.
+    if (this.followYaw === undefined) this.followYaw = this.yaw;
+    if (this.lookYaw === undefined) { this.lookYaw = 0; this.lookPitch = 0; }
+
+    // While you are looking around by hand, and for a moment after, the
+    // automatic swing stands down — a camera fighting your thumb is horrible.
+    this.lookHold = Math.max(0, (this.lookHold ?? 0) - dt);
+    const held = this.looking || this.lookHold > 0;
+    if (!held) {
+      const k = Math.min(1, dt * CAM.recentre);
+      this.lookYaw -= this.lookYaw * k;
+      this.lookPitch -= this.lookPitch * k;
+      if (Math.abs(this.lookYaw) < 0.004) this.lookYaw = 0;
+      if (Math.abs(this.lookPitch) < 0.004) this.lookPitch = 0;
+    }
+
+    let err = held ? 0 : shortest(this.camGoal - this.followYaw);
+    if (Math.abs(err) < CAM.deadZone) err = 0;
+    else err -= Math.sign(err) * CAM.deadZone;     // no jump at the edge of the zone
+
+    const ease = this.snapCam ? 30 : CAM.ease;
+    let step = err * Math.min(1, dt * ease);
+    const cap = (this.snapCam ? 99 : CAM.maxTurn) * dt;    // the speed limit
+    if (Math.abs(step) > cap) step = Math.sign(step) * cap;
+    this.followYaw += step;
+
+    this.yaw = this.followYaw + this.lookYaw;
+    const wantPitch = CAM.pitch + this.lookPitch;
+    this.pitch += (wantPitch - this.pitch) * Math.min(1, dt * 6);
+    this.pitch = Math.max(-0.45, Math.min(0.92, this.pitch));
+  }
+
+  /**
+   * Drag on the right of the screen: swing the camera off her back to look
+   * around. It is an offset rather than a free camera, so letting go always
+   * brings it home.
+   */
+  lookBy(dx, dy) {
+    if (!this.touch) return;
+    this.lookYaw = Math.max(-CAM.lookLimit, Math.min(CAM.lookLimit,
+      (this.lookYaw ?? 0) - dx * CAM.lookSpeedX));
+    this.lookPitch = Math.max(-0.5, Math.min(0.5, (this.lookPitch ?? 0) + dy * CAM.lookSpeedY));
+    this.lookHold = CAM.lookHold;
+    // `yaw` itself is recomputed from followYaw + lookYaw next frame, so
+    // nothing is written to it here — doing both would double the movement.
+  }
+
+  /** The thumb went down on, or came off, the look zone. */
+  setLooking(on) {
+    this.looking = on;
+    if (!on) this.lookHold = CAM.lookHold;
+  }
+
+  /** Snap straight back behind her — the "centre the camera" button. */
+  recentreCamera() {
+    this.lookYaw = 0;
+    this.lookPitch = 0;
+    this.lookHold = 0;
+    this.looking = false;
+    if (this.player) {
+      this.camHeading = this.player.facing;
+      this.camGoal = this.player.facing + Math.PI;
+      this.followYaw = this.camGoal;
+    }
   }
 
   #camera(dt, terrain, baseY) {
@@ -1590,16 +1746,32 @@ class Game {
     const shoulder = this.touch ? 0 : 1.0;
     const target = new THREE.Vector3(p.pos.x, p.pos.y + 2.3, p.pos.z).addScaledVector(right, shoulder);
 
-    // pull in when soil is behind us, so the camera never buries itself
-    let dist = this.camDist;
-    for (let s = 1.2; s <= this.camDist; s += 0.6) {
+    /*
+     * Pull in when soil is behind us, so the camera never buries itself.
+     *
+     * The burrow is two surfaces, floor and ceiling, not solid blocks — so a
+     * camera that ends up past where they meet is not inside anything, it is
+     * outside everything, and it looks straight through the wall at the ant.
+     * That is what "seeing through walls" actually is here.
+     *
+     * Hence the fine step and the second loop: sampling every 0.6 units could
+     * step clean over a thin pinch between chambers, and stopping at a fixed
+     * 2.6 minimum was no use in a tunnel narrower than that.
+     */
+    const clearAt = (s) => {
       const pr = target.clone().addScaledVector(dir, s);
       const head = terrain.headAt(pr.x, pr.z);
       const fl = baseY + terrain.floorAt(pr.x, pr.z);
-      if (head < MIN_HEADROOM * 0.8 || pr.y < fl + 0.6 || pr.y > fl + head - 0.3) {
-        dist = Math.max(2.6, s - 0.8);
-        break;
-      }
+      return head >= MIN_HEADROOM * 0.8 && pr.y >= fl + 0.6 && pr.y <= fl + head - 0.3;
+    };
+
+    let dist = this.camDist;
+    for (let s = 1.0; s <= this.camDist; s += 0.28) {
+      if (!clearAt(s)) { dist = Math.max(CAM_MIN, s - 0.45); break; }
+    }
+    // and if that spot is still not clear, keep coming in until it is
+    for (let guard = 0; guard < 10 && dist > CAM_MIN && !clearAt(dist); guard++) {
+      dist = Math.max(CAM_MIN, dist - 0.3);
     }
 
     const want = target.clone().addScaledVector(dir, dist);

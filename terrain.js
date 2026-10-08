@@ -308,7 +308,10 @@ export class Terrain {
    */
   resolve(pos, radius, need = MIN_HEADROOM) {
     const g = { x: 0, z: 0 };
-    for (let pass = 0; pass < 6; pass++) {
+    // Ten passes rather than six: six was not always enough to walk a body
+    // back out of soil it had already sunk into, and a half-resolved position
+    // is what being able to see through a wall looks like.
+    for (let pass = 0; pass < 10; pass++) {
       // sample a ring so a fat body cannot poke its side into the wall
       let worst = this.headAt(pos.x, pos.z);
       let wx = pos.x, wz = pos.z;

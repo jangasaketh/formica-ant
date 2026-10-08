@@ -116,6 +116,7 @@ export class TouchControls {
         this.lastX = e.clientX;
         this.lastY = e.clientY;
         this.moved = 0;
+        this.game.setLooking(true);
         grab(look, e.pointerId);
       } else if (this.pinch === null) {
         this.pinch = { id: e.pointerId, x: e.clientX, y: e.clientY, base: this.game.camDist };
@@ -125,8 +126,12 @@ export class TouchControls {
     look.addEventListener('pointermove', (e) => {
       const g = this.game;
       if (e.pointerId === this.lookId) {
-        this.moved += Math.abs(e.clientX - this.lastX) + Math.abs(e.clientY - this.lastY);
+        const dx = e.clientX - this.lastX, dy = e.clientY - this.lastY;
+        this.moved += Math.abs(dx) + Math.abs(dy);
         this.lastX = e.clientX; this.lastY = e.clientY;
+        // Swing the camera off her back to look around. It is an offset, not a
+        // free camera, so it finds its own way home when you let go.
+        if (!g.tactical) g.lookBy(dx, dy);
       } else if (this.pinch && e.pointerId === this.pinch.id) {
         const spread = Math.hypot(e.clientX - this.lastX, e.clientY - this.lastY);
         if (!this.pinch.start) this.pinch.start = spread;
@@ -138,6 +143,7 @@ export class TouchControls {
       if (this.pinch && e.pointerId === this.pinch.id) { this.pinch = null; return; }
       if (e.pointerId !== this.lookId) return;
       this.lookId = null;
+      this.game.setLooking(false);
       // A tap rather than a drag, while the tactical view is up, is an order:
       // the finger is the cursor there, so send the crew where it landed.
       if (this.moved < 12 && this.game.tactical) {
@@ -248,6 +254,7 @@ export class TouchControls {
     tap('tb-call', () => g.callNestmates());
     tap('tb-pause', () => (g.state === 'playing' ? g.pause() : g.resume()));
     tap('tb-full', () => this.toggleFullscreen());
+    tap('tb-centre', () => g.recentreCamera());
     tap('tb-map', () => {
       document.body.classList.toggle('bigmap');
       g.drawMap?.();
